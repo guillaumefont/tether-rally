@@ -57,6 +57,45 @@ func pick(menu, b: Control) -> void:
 	await frames(2)
 	await tap(b)
 
+# where everything on the Off the Map page sits: every tile, the arrows, START, the map card
+func _layout(menu) -> Dictionary:
+	var d := {}
+	for b in menu.body.find_children("*", "Button", true, false):
+		if b.has_meta("pick"): d[str(b.get_meta("pick"))] = b.get_global_rect()
+		elif b.has_meta("custom_track"): d["arrow%d" % b.get_meta("custom_track")] = b.get_global_rect()
+		elif b.has_meta("custom_start"): d["start"] = b.get_global_rect()
+	for l in menu.body.find_children("*", "Label", true, false):
+		if l.has_meta("custom_name"): d["name"] = l.get_global_rect()
+		if l.has_meta("custom_desc"): d["desc"] = l.get_global_rect()
+	return d
+
+# Guillaume, 2026-11-14: the page must not jump with the picks. Every mode, layout, world,
+# lap count and track: each tile, arrow and START stays exactly where it was.
+func _no_jump(menu, tag: String) -> void:
+	menu._scroller.scroll = 0.0
+	var saved: Dictionary = menu.custom.duplicate()
+	var base := _layout(menu)
+	var moved := []
+	var tries := []
+	for m in ["trial", "race", "versus"]: tries.append(["mode", m])
+	for v in Defs.VARIANTS: tries.append(["variant", v[0]])
+	for t in Themes.ORDER: tries.append(["theme", t])
+	for k in Menu.CUSTOM_LAPS: tries.append(["laps", k])
+	for i in Defs.TRACKS.size(): tries.append(["track", i])
+	for t in tries:
+		menu.custom[t[0]] = t[1]
+		menu.show_custom()
+		menu._scroller.scroll = 0.0
+		await frames(2)
+		var now := _layout(menu)
+		for k in base:
+			if not now.has(k) or now[k].position.distance_to(base[k].position) > 0.5 or now[k].size.distance_to(base[k].size) > 0.5:
+				moved.append("%s=%s: %s" % [t[0], str(t[1]), k])
+		menu.custom = saved.duplicate()
+	check(moved.is_empty(), "%s: nothing moves whatever is picked (%d tries)%s" % [tag, tries.size(), "" if moved.is_empty() else ": " + ", ".join(moved.slice(0, 6))])
+	menu.show_custom()
+	await frames(2)
+
 func _on_screen(c: Control) -> bool:
 	return root.get_visible_rect().grow(1.0).encloses(c.get_global_rect())
 
@@ -117,7 +156,9 @@ func _init() -> void:
 				check(r.position.x >= 0.0 and r.end.x <= root.get_visible_rect().end.x, "%s: %s tile %s inside the screen width" % [tag, key, str(b.get_meta("pick")[1])])
 		check(_picks(menu, "theme").size() == Themes.ORDER.size(), "%s: every world, even locked ones" % tag)
 		check(_picks(menu, "variant").size() == Defs.VARIANTS.size(), "%s: every layout" % tag)
-		check(_picks(menu, "tier").is_empty(), "%s: no rival level for a Time trial" % tag)
+		var tiers := _picks(menu, "tier")
+		check(tiers.size() == Rivals.TIERS.size() and tiers.all(func(b): return b.disabled), "%s: Time trial: the rival row stays in place, greyed out" % tag)
+		await _no_jump(menu, tag)
 		menu.go_back()
 		await frames(2)
 		check(menu.screen == "home", "%s: back goes home" % tag)

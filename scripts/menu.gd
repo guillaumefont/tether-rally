@@ -2000,6 +2000,8 @@ func show_custom() -> void:
 	var tn: Label = ui._label(String(d["name"]).to_upper(), 20, C_FG, ui.f_display)
 	tn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tn.autowrap_mode = TextServer.AUTOWRAP_OFF
+	tn.clip_text = true   # a long name never widens the column
+	tn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	tn.set_meta("custom_name", true)
 	nv.add_child(tn)
 	var tl: Label = ui._label("%d / %d  ·  %d laps" % [int(c["track"]) + 1, n, custom_laps(c)], 12, C_MUTED, ui.f_bold)
@@ -2024,16 +2026,20 @@ func show_custom() -> void:
 	_pick_row(opts, "World", Themes.ORDER.map(func(t): return [t, t, String(Themes.get_theme(t)["name"])]), "theme", th)
 	_pick_row(opts, "Mode", CUSTOM_MODES, "mode", th)
 	_pick_row(opts, "Layout", Defs.VARIANTS.map(func(v): return [v[0], v[0], v[1]]), "variant", th)
+	# Every row stays where it is whatever is picked (Guillaume, 2026-11-14: the page must not
+	# jump): the layout's rule is always one line, and the rivals row is always there, greyed
+	# out for a Time trial.
 	var desc := ""
 	for v in Defs.VARIANTS:
-		if v[0] == c["variant"] and v[0] != "standard": desc = v[2]
-	if desc != "":   # only a layout with a rule of its own needs a word
-		var dl: Label = ui._label(desc, 13, C_MUTED)
-		dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		opts.add_child(dl)
+		if v[0] == c["variant"]: desc = v[2]
+	var dl: Label = ui._label(desc, 13, C_MUTED)
+	dl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	dl.clip_text = true
+	dl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	dl.set_meta("custom_desc", true)
+	opts.add_child(dl)
 	_pick_row(opts, "Laps", CUSTOM_LAPS.map(func(k): return [k, "", "Usual" if k == 0 else str(k)]), "laps", 40)
-	if c["mode"] != "trial":
-		_pick_row(opts, "Rivals", range(Rivals.TIERS.size()).map(func(t): return [t, "", Rivals.tier_name(t)]), "tier", 40)
+	_pick_row(opts, "Rivals  ·  races only", range(Rivals.TIERS.size()).map(func(t): return [t, "", Rivals.tier_name(t)]), "tier", 40, c["mode"] == "trial")
 	var pad := Control.new()
 	pad.custom_minimum_size.y = 4
 	opts.add_child(pad)
@@ -2057,7 +2063,7 @@ func show_custom() -> void:
 
 # one row of choices: its name in small capitals, then a tile per choice ([value, icon, name]);
 # the picked one is filled in ink like a ticked box
-func _pick_row(parent: VBoxContainer, title: String, choices: Array, key: String, h: int) -> void:
+func _pick_row(parent: VBoxContainer, title: String, choices: Array, key: String, h: int, off := false) -> void:
 	parent.add_child(ui._label(title.to_upper(), 12, C_MUTED, ui.f_bold))
 	var g := HBoxContainer.new()
 	g.add_theme_constant_override("separation", 6)
@@ -2070,6 +2076,7 @@ func _pick_row(parent: VBoxContainer, title: String, choices: Array, key: String
 		var lbl: Label = b.get_meta("label")
 		lbl.add_theme_font_size_override("font_size", 11 if ui.is_portrait() else 12)
 		b.set_meta("pick", [key, ch[0]])
+		b.disabled = off   # does not apply to what is picked: greyed, but kept in its place
 		ui.set_tile_on(b, custom[key] == ch[0])
 		b.pressed.connect(func(): _custom_set(key, ch[0]))
 		g.add_child(b)
