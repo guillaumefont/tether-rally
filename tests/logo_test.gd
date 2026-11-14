@@ -24,6 +24,18 @@ func _init() -> void:
 			fail("icon kind %s does not draw" % kind)
 		elif img.is_invisible():
 			fail("icon kind %s is empty" % kind)
+	# no background behind the logo (Guillaume, 2026-11-14): the icon's corners are clear, and
+	# where an icon must be opaque it is one flat colour, not a scene
+	var ic := _img(Logo.icon_svg("icon", 128))
+	if ic != null and (ic.get_pixel(3, 3).a > 0.01 or ic.get_pixel(124, 124).a > 0.01):
+		fail("the icon has a background behind the medal")
+	var bg := _img(Logo.icon_svg("background", 64))
+	if bg != null:
+		var c0 := bg.get_pixel(0, 0)
+		for p in [Vector2i(32, 32), Vector2i(63, 63), Vector2i(10, 50)]:
+			if not bg.get_pixel(p.x, p.y).is_equal_approx(c0):
+				fail("the adaptive background is not one flat colour")
+				break
 	# the project icon and the launcher icons come from the medal, not an old hand edit
 	if FileAccess.get_file_as_string("res://icon.svg").strip_edges() != Logo.icon_svg("icon", 128):
 		fail("icon.svg is out of date: run tools/gen_icons.gd")

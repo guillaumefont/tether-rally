@@ -1,6 +1,6 @@
 # The Tether Rally logo, "the medal" (picked by Guillaume 2026-11-14): a round chalk-cream
 # medal, dark inside, with the amber car swinging round the tower seen from above, three speed
-# trails behind it. For the app icon it sits in front of a snowy dusk scene with two light beams.
+# trails behind it. No background behind it (where an icon must be opaque: flat ICON_BG).
 # Everything is SVG in a -50..50 box (medal radius 40, the loading ring at 48), so the icons
 # (tools/gen_icons.gd), the web loading page and the game draw the same shapes. In the game the
 # frame is a texture and the moving parts (trails, rope, tower hub, car) are drawn by
@@ -28,6 +28,7 @@ const CAR := [
 	[8.2, -3.6, 1.0, 1.6, "#fff4c8"], [8.2, 2.0, 1.0, 1.6, "#fff4c8"],
 ]
 const CREAM := "#f3efe6"
+const ICON_BG := "#10292b"   # flat fill where an icon must be opaque (store, Android adaptive background)
 const AMBER := "#f2b134"
 
 # The medal logo at `c`, `k` pixels per logo unit (frame radius R_FRAME), car at angle
@@ -98,36 +99,22 @@ static func _parts(a: float, mono := false) -> String:
 		s += "<rect x='%s' y='%s' width='%s' height='%s' fill='%s'/>" % [r[0], r[1], r[2], r[3], "#fff" if mono else r[4]]
 	return s + "</g>"
 
-# the snowy dusk scene behind the medal on the app icon
-static func _scene() -> String:
-	var s := """<defs><linearGradient id='sk' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#0d2233'/><stop offset='.45' stop-color='#4c4062'/><stop offset='.72' stop-color='#e9b7aa'/><stop offset='1' stop-color='#f3d2b8'/></linearGradient>
-<linearGradient id='bm' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#fff' stop-opacity='.22'/><stop offset='1' stop-color='#fff' stop-opacity='0'/></linearGradient></defs>
-<rect x='-50' y='-50' width='100' height='100' fill='url(#sk)'/>
-<polygon points='-6,-52 6,-52 30,40 -30,40' fill='url(#bm)' transform='rotate(-24 0 -52)'/>
-<polygon points='-5,-52 5,-52 26,40 -26,40' fill='url(#bm)' transform='rotate(28 0 -52)'/>
-<path d='M -50 22 Q -30 12 -10 20 T 30 16 T 50 20 V 50 H -50 Z' fill='#8fa3b5'/>"""
-	for p in [[-42, 24, 9], [-36, 27, 7], [-28, 26, 6], [33, 25, 8], [40, 27, 10], [46, 24, 6]]:
-		var x: float = p[0]; var y: float = p[1]; var h: float = p[2]
-		s += "<polygon points='%s,%s %s,%s %s,%s' fill='#1f4438'/>" % [x - h * 0.38, y, x + h * 0.38, y, x, y - h]
-		s += "<polygon points='%s,%s %s,%s %s,%s' fill='#e6eef4'/>" % [x - h * 0.2, y - h * 0.5, x + h * 0.2, y - h * 0.5, x, y - h]
-	s += "<path d='M -50 32 Q -20 22 10 30 T 50 28 V 50 H -50 Z' fill='#c9d6e0'/><path d='M -50 42 Q -10 34 30 41 T 50 40 V 50 H -50 Z' fill='#e8eef3'/>"
-	for f in [[-40, -8, 1], [-34, 10, .8], [38, -14, 1.1], [44, 4, .7], [-44, 26, .9], [30, 30, 1], [40, 40, .8], [-30, 40, .7], [-20, -38, .6], [26, -40, .7], [-46, -30, .6], [46, -34, .8]]:
-		s += "<circle cx='%s' cy='%s' r='%s' fill='#fff' fill-opacity='.75'/>" % f
-	return s
-
-# kind: "icon" (rounded square, scene + medal), "square" (full bleed, store), "background"
-# (scene only), "foreground" (medal only, inside Android's safe zone), "monochrome" (white mask)
+# The logo has no background (Guillaume, 2026-11-14). kind: "icon" (the medal alone on
+# transparent: icon.svg and the legacy launcher icon), "square" (store icon: Play wants it
+# opaque, so the medal on the flat ICON_BG), "background" (Android adaptive background: flat
+# ICON_BG, the launcher can't show transparency), "foreground" (medal only, inside Android's
+# safe zone), "monochrome" (white mask for themed icons)
 static func icon_svg(kind: String, size: int) -> String:
-	var medal := "<g transform='translate(0 -2) scale(.9)'>%s%s</g>" % [_frame(), _parts(ANGLE)]
+	var parts := _frame() + _parts(ANGLE)
 	match kind:
 		"icon":
-			return _svg(size, "<defs><clipPath id='ic'><rect x='-50' y='-50' width='100' height='100' rx='19'/></clipPath></defs><g clip-path='url(#ic)'>%s</g>%s" % [_scene(), medal])
+			return _svg(size, "<g transform='translate(0 -1.5) scale(1.16)'>%s</g>" % parts)
 		"square":
-			return _svg(size, _scene() + medal)
+			return _svg(size, "<rect x='-50' y='-50' width='100' height='100' fill='%s'/><g transform='translate(0 -1.5) scale(1.0)'>%s</g>" % [ICON_BG, parts])
 		"background":
-			return _svg(size, _scene())
+			return _svg(size, "<rect x='-50' y='-50' width='100' height='100' fill='%s'/>" % ICON_BG)
 		"foreground":
-			return _svg(size, "<g transform='scale(.72)'>%s%s</g>" % [_frame(), _parts(ANGLE)])
+			return _svg(size, "<g transform='scale(.72)'>%s</g>" % parts)
 		"monochrome":
 			return _svg(size, "<g transform='scale(.72)'>%s%s</g>" % [_frame(true), _parts(ANGLE, true)])
 	return ""
