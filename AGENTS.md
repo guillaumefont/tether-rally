@@ -71,7 +71,8 @@ godot --headless --path . --script tests/tutorial_test.gd  # the first-launch tu
 godot --headless --path . --script tests/cosmetics_test.gd  # garage items: prices, every look builds, looks only
 godot --headless --path . --script tests/economy_test.gd    # coins, Track of the day, awards, buying, progress reset
 godot --headless --path . --script tests/monetization_test.gd # ads/store stubs: rewards, daily caps, full-screen pacing, No ads
-godot --headless --path . --script tests/results_offers_test.gd # results ad offers: x2 coins once, caps, Gold ghost traces + unlock
+godot --headless --path . --script tests/results_offers_test.gd # results ad offers, Gold ghost, Daily Detour attempts, full-screen ads
+godot --headless --path . --script tests/store_build_test.gd  # Play preset: AAB, no preview/self_update
 godot --headless --path . --script tests/medals_test.gd     # medals saved and shown: race wins, layout bumps
 godot --headless --path . --script tests/race_results_test.gd # race results = order over the line, medal from it
 godot --headless --path . --script tests/attack_unlock_test.gd # Time attack tracks open with the campaign
@@ -140,6 +141,8 @@ Only redo the ones where the change is visible, and put before/after images in t
   Nothing paid touches race times; Reset progress never takes a purchase back (store.cfg is apart).
 - The app id is temporary and will change: reconfirm it with Guillaume before any Play upload,
   Play product, AdMob app or ad unit.
+- Export presets: "Android" is the test APK (CI adds `preview,self_update`), "Web" gets `preview` in CI, and
+  "Android Play" is the store AAB (Gradle): never give it `preview` or `self_update` (`tests/store_build_test.gd`).
 - Tests: `Daily.fake_day` and `Monetization.fake_now` fake the date and clock. A `SceneTree` test that
   leaves lambdas in a static var (e.g. `Store.on_changed`) aborts at exit: clear them before `quit()`.
 

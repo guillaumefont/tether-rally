@@ -124,7 +124,11 @@ jobs:
           echo "OUT=$RUNNER_TEMP/out" >> "$GITHUB_ENV"
           OUT="$RUNNER_TEMP/out"
           mkdir -p "$OUT/web"
+          # the browser build is a test build too: "preview" turns on the Store/Ads stubs
+          sed -i '/^\[preset.2\]/,/^\[preset.2.options\]/ s/^custom_features=""/custom_features="preview"/' export_presets.cfg
+          grep -q 'custom_features="preview"' export_presets.cfg
           $RUNNER_TEMP/godot --headless --path . --export-release Web "$OUT/web/index.html"
+          sed -i '/^\[preset.2\]/,/^\[preset.2.options\]/ s/^custom_features="preview"/custom_features=""/' export_presets.cfg
           test -s "$OUT/web/index.wasm"
 
       # Release template (about half the size of the debug one), signed with the fixed test

@@ -44,6 +44,8 @@ jobs:
         run: ./godot --headless --path . --script tests/monetization_test.gd
       - name: Rewarded-ad offers on the results (x2 coins)
         run: ./godot --headless --path . --script tests/results_offers_test.gd
+      - name: Play store preset never carries preview or self_update
+        run: ./godot --headless --path . --script tests/store_build_test.gd
       - name: Medals are saved and shown (race wins, layout bumps)
         run: ./godot --headless --path . --script tests/medals_test.gd
       - name: Race results follow the finish line (Twin Bend case)
