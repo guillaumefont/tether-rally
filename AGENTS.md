@@ -29,7 +29,8 @@
   is mounted (it is frozen into the APK, and changing it forces a reinstall); checking, downloading
   and the UI text live in `scripts/updater.gd` (`/root/SelfUpdate/Updater`), which comes from the
   mounted data and so updates itself. A PR's APK falls back to main's `update.json` once its PR
-  folder is gone. Settings shows the build and a CHECK FOR UPDATE button (`ui._build_version`).
+  folder is gone. The home page shows the build as a discreet pencil note in the top corner (tap =
+  check now); it becomes a red taped slip only when there is an update to take (`menu._update_slip`).
 - Settings is two columns in landscape (`_set_cols`, switched in `ui.layout()`): a landscape phone
   is only ~450 logical px tall. Check that anything added there still fits (the self-update test does).
 

@@ -159,66 +159,62 @@ func _run() -> void:
 	check(SelfUpdate.pick_saved(DIR, app).is_empty(), "a download made for another app shell is dropped")
 	_wipe()
 
-	# the home page's slip and the Settings line
-	check(su.version_line().begins_with("Development build" if BuildInfo.BUILD == 0 else "Build"), "Settings names the build: " + su.version_line())
+	# the home page: a discreet pencilled version note in the top corner, which checks for an
+	# update when tapped and turns into a red slip when there is one to take (Guillaume, 2026-11-14)
+	check(su.version_line().begins_with("Development build" if BuildInfo.BUILD == 0 else "Build"), "the build in words: " + su.version_line())
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	await frames(5)
 	var ui = main.ui
 	var menu = ui.menu
 	ui.loading.visible = false
-	for sz in [Vector2i(1280, 720), Vector2i(720, 1280)]:
-		root.size = sz
-		await frames(3)
-		su.status = "current"
-		menu.show_home()
-		await create_timer(1.0).timeout
-		var tag := "%dx%d" % [sz.x, sz.y]
-		check(_slips(menu).is_empty(), "%s: up to date: no slip on the home page" % tag)
-		su._set_status("ready")   # a download finishes while the home page is up
-		await frames(3)
-		var s := _slips(menu)
-		check(s.size() == 1, "%s: update ready: one slip appears on the home page right away" % tag)
-		if s.size() == 1:
-			check(root.get_visible_rect().encloses(s[0].get_global_rect()), "%s: the slip is on screen" % tag)
-			check(s[0].size.y >= 36.0, "%s: big enough to tap" % tag)
-			var tabs: Array = menu.body.find_children("*", "Button", true, false).filter(func(b): return b != s[0] and b.is_visible_in_tree() and not b.has_meta("update_slip"))
-			check(not tabs.any(func(b): return b.get_global_rect().intersects(s[0].get_global_rect())), "%s: it covers no other button" % tag)
-			check(s[0].get_child(0).text.contains("restart"), "%s: it says restart" % tag)
-		su._set_status("apk")
-		await frames(3)
-		s = _slips(menu)
-		check(s.size() == 1 and s[0].get_child(0).text.contains("install"), "%s: a build needing the new app offers the install" % tag)
-		su._set_status("current")
-		await frames(3)
-		check(_slips(menu).is_empty(), "%s: gone when there is nothing to offer" % tag)
-	# Settings: the game version, and a button to check for an update (Guillaume, 2026-11-14)
 	su.status = "off"
-	ui.show_settings(main._options(true))
-	await frames(2)
-	check(ui._ver_box.is_visible_in_tree(), "Settings shows a GAME VERSION box")
-	check(ui._ver_title.text == su.version_title() and ui._ver_title.text != "", "it names the build: " + ui._ver_title.text)
-	check(not ui._ver_btn.visible, "a build that never updates itself has no check button: " + ui._ver_status.text)
-	var cases := { "idle": ["CHECK FOR UPDATE", true], "current": ["CHECK FOR UPDATE", true], "error": ["CHECK FOR UPDATE", true],
-		"checking": ["CHECK FOR UPDATE", false], "downloading": ["CHECK FOR UPDATE", false],
-		"ready": ["RESTART TO UPDATE", true], "apk": ["INSTALL NEW VERSION", true] }
-	for stt in cases:
-		su._set_status(stt)   # the box follows the updater while it is open
-		await frames(1)
-		var lbl: Label = ui._ver_btn.get_meta("label")
-		check(ui._ver_btn.visible and lbl.text == cases[stt][0] and ui._ver_btn.disabled != cases[stt][1],
-			"%s: button '%s'%s, says '%s'" % [stt, lbl.text, "" if cases[stt][1] else " (greyed)", ui._ver_status.text])
-		check(ui._ver_status.text == su.status_text() and ui._ver_status.text != "", "%s: the status is spelled out" % stt)
+	menu.show_home()
+	await create_timer(1.0).timeout
+	check(_slips(menu).is_empty(), "a build that never updates itself shows no version note")
 	ui._uh = 450   # a phone
+	var states := { "idle": ["check for update", false, true], "current": ["up to date", false, true],
+		"error": ["offline", false, true], "checking": ["checking", false, false],
+		"downloading": ["downloading", false, false], "ready": ["restart", true, true], "apk": ["install", true, true] }
 	for sz in [Vector2i(1280, 720), Vector2i(720, 1280), Vector2i(2400, 1080), Vector2i(1080, 2400)]:
 		root.size = sz
 		ui._apply_scale()
 		await frames(3)
-		var r: Rect2 = ui._ver_btn.get_global_rect()
-		check(root.get_visible_rect().encloses(r) and r.size.y >= 40.0, "%dx%d: the button is on screen and tappable" % [sz.x, sz.y])
-		var panel: Rect2 = ui.settings_panel.get_global_rect()
-		check(root.get_visible_rect().grow(1.0).encloses(panel), "%dx%d: the whole Settings page still fits on screen (DONE included)" % [sz.x, sz.y])
+		su.status = "idle"
+		menu.show_home()
+		await create_timer(1.0).timeout
+		var tag := "%dx%d" % [sz.x, sz.y]
+		for stt in states:
+			su._set_status(stt)   # the note follows the updater live
+			await frames(2)
+			var s := _slips(menu)
+			check(s.size() == 1, "%s %s: one version note" % [tag, stt])
+			if s.size() != 1:
+				continue
+			var txt: String = s[0].get_child(0).text
+			var want: Array = states[stt]
+			check(txt.contains(want[0]) and s[0].get_meta("loud") == want[1] and s[0].disabled != want[2],
+				"%s %s: '%s'%s%s" % [tag, stt, txt, " (red slip)" if want[1] else "", "" if want[2] else " (busy)"])
+			if stt in ["idle", "current", "error"]:
+				check(txt.contains("build"), "%s %s: names the build" % [tag, stt])
+			if stt in ["idle", "ready"]:
+				check(root.get_visible_rect().encloses(s[0].get_global_rect()) and s[0].size.y >= 36.0, "%s %s: on screen, big enough to tap" % [tag, stt])
+				var others: Array = menu.body.find_children("*", "Button", true, false).filter(func(b): return b.is_visible_in_tree() and not b.has_meta("update_slip"))
+				check(not others.any(func(b): return b.get_global_rect().intersects(s[0].get_global_rect())), "%s %s: covers no other button" % [tag, stt])
+	# a tap on the quiet note checks now (here: no network object, so it stays put, no crash)
+	su._set_status("current")
+	await frames(2)
+	_slips(menu)[0].pressed.emit()
+	await frames(2)
+	check(su.status == "current", "tapping the note with no updater network does nothing harmful")
 	su.status = "off"
+	# Settings still fits a landscape phone (two columns), DONE included
+	ui.show_settings(main._options(true))
+	for sz in [Vector2i(1280, 720), Vector2i(720, 1280), Vector2i(2400, 1080), Vector2i(1080, 2400)]:
+		root.size = sz
+		ui._apply_scale()
+		await frames(3)
+		check(root.get_visible_rect().grow(1.0).encloses(ui.settings_panel.get_global_rect()), "%dx%d: the whole Settings page fits on screen" % [sz.x, sz.y])
 	ui.hide_settings()
 
 	print("self update test: %s" % ("PASS" if fails == 0 else "%d FAIL" % fails))

@@ -197,7 +197,24 @@ func offer() -> String:
 		"apk": return "new version  ·  install  ›"
 	return ""
 
-# the slip (or the Settings button) was tapped to take the update
+# The home page's pencilled version note (Guillaume, 2026-11-14: the version and a way to check
+# for an update, "in the home screen if it's more discreet"): [text, loud]. Loud = an update to
+# take (red, on a taped slip); otherwise a quiet pencil line. "" = no note (a build that never
+# updates itself). Tapping it calls press().
+func home_note() -> Array:
+	if status == "off":
+		return ["", false]
+	var b := "build %d" % running()
+	match status:
+		"ready": return ["build %d ready  ·  restart  ›" % maxi(latest, int(_want.get("build", 0))), true]
+		"apk": return ["new version  ·  install  ›", true]
+		"checking": return [b + "  ·  checking…", false]
+		"downloading": return ["downloading build %d…" % int(_want.get("build", 0)), false]
+		"current": return [b + "  ·  up to date  ›", false]
+		"error": return [b + "  ·  offline, tap to retry  ›", false]
+	return [b + "  ·  check for update  ›", false]
+
+# take the update
 func act() -> void:
 	if status == "ready":
 		# Android (and desktop) start the game again; the new data mounts at launch
@@ -206,7 +223,7 @@ func act() -> void:
 	elif status == "apk":
 		OS.shell_open((source if source != "" else BuildInfo.CHANNEL) + APK)
 
-# ------------------------------------------------------------ Settings: version + button
+# ------------------------------------------------------------ the version in words
 # "Build 328", or what kind of build this is
 func version_title() -> String:
 	if BuildInfo.BUILD == 0:
@@ -231,17 +248,7 @@ func status_text() -> String:
 		"error": return "Couldn't reach the update server (offline?)"
 	return "Not checked yet"
 
-# the button under it: "" = no button (a build that doesn't update itself)
-func button_text() -> String:
-	match status:
-		"off": return ""
-		"ready": return "RESTART TO UPDATE"
-		"apk": return "INSTALL NEW VERSION"
-	return "CHECK FOR UPDATE"
-
-func button_enabled() -> bool:
-	return not status in ["off", "checking", "downloading"]
-
+# the version note was tapped: take the update, or look for one now
 func press() -> void:
 	if status in ["ready", "apk"]:
 		act()
