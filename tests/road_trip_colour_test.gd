@@ -1,7 +1,7 @@
 # The Road Trip page has its world's colour (Guillaume, 2026-11-14: "the Road Trip screen
-# looks sad next to the others"). Each world's events lie on a page in that world's tint,
-# joined to its open tab; medals are stamped in their own metal; the world photos are held
-# by tape in the world's colour. On a phone held sideways, every stop's name fits its line
+# looks sad next to the others"), in touches only: the world photo by its name, medals stamped in
+# their own metal, world photos held by tape in the world's colour. No full background of
+# world colour behind the events (he didn't like it, same day). On a phone held sideways, every stop's name fits its line
 # (they were cut to "LA…", "TW…" in two narrow columns).
 #   godot --headless --path . --script tests/road_trip_colour_test.gd
 extends SceneTree
@@ -52,12 +52,13 @@ func _init() -> void:
 			menu.show_list()
 			await frames(4)
 			var theme: String = Campaign.CHAPTERS[w]["theme"]
-			var pages: Array = menu.body.find_children("*", "PanelContainer", true, false).filter(func(n): return n.has_meta("world_page"))
+			var pages: Array = menu.body.find_children("*", "Control", true, false).filter(func(n): return n.has_meta("world_page"))
 			check(pages.size() == 1, "%s %s: one world page" % [tag, theme])
-			if pages.size() == 1:
-				var sb = pages[0].get_theme_stylebox("panel")
-				check(sb.bg_color == menu.WORLD_TINT.get(theme), "%s %s: the page is in the world's tint" % [tag, theme])
-				check(sb.bg_color.s > 0.05, "%s %s: the tint has some colour" % [tag, theme])
+			# no full page of world colour behind the events (Guillaume, 2026-11-14)
+			var filled: Array = menu.body.find_children("*", "PanelContainer", true, false).filter(func(n):
+				var sb = n.get_theme_stylebox("panel")
+				return sb is StyleBoxFlat and n.size.y > 300.0 and sb.bg_color.a > 0.0 and sb.bg_color.s > 0.08)
+			check(filled.is_empty(), "%s %s: no world-colour background behind the events" % [tag, theme])
 			# medals stamped in their own metal, one colour per medal kind
 			var stamps: Array = menu.body.find_children("*", "Control", true, false).filter(func(n): return n is Paper.Stamp and n.text in menu.MEDAL_STAMP)
 			check(stamps.size() > 0, "%s %s: medal stamps shown" % [tag, theme])
