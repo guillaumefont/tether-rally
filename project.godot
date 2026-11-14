@@ -14,6 +14,10 @@ boot_splash/stretch_mode=1
 config/icon="res://icon.svg"
 config/quit_on_go_back=false
 
+[autoload]
+
+SelfUpdate="*res://scripts/self_update.gd"
+
 [display]
 
 window/size/viewport_width=1280

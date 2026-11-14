@@ -736,11 +736,22 @@ func _build_settings() -> void:
 	var done := icon_button("check", "DONE", "go", false, 56)
 	done.pressed.connect(hide_settings)
 	vb.add_child(done)
+	# which build this is (test builds: and whether a newer one is on its way)
+	_version = _label("", 12, C_MUTED)
+	_version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(_version)
 	settings_ov.visible = false
+
+var _version: Label
+
+func version_line() -> String:
+	var su := get_node_or_null("/root/SelfUpdate")
+	return su.version_line() if su else "Development build"
 
 func show_settings(opts: Dictionary) -> void:
 	set_options(_settings_o, opts)
 	_reset_arm(false)
+	_version.text = version_line()
 	settings_ov.visible = true
 
 func hide_settings() -> void:
