@@ -57,6 +57,17 @@ func _init() -> void:
 		fail("medal frame texture size %s" % fi.get_size())
 	elif fi.get_pixel(100, 100).get_luminance() > 0.25 or fi.get_pixel(100, 100 - 74).get_luminance() < 0.6:
 		fail("medal frame: disc not dark or rim not cream")
+	# the launcher icons live in the APK, not the game data: a new icon must make installed test
+	# APKs offer the new APK ("the icon that didn't change" case, 2026-11-14: the medal reached
+	# phones through a data update while the launcher kept the old icon)
+	var ci := FileAccess.get_file_as_string("res://.github/workflows/build.yml")
+	var fp_line := ""
+	for line in ci.split("\n"):
+		if line.strip_edges().begins_with("fp=$("):
+			fp_line = line
+	for want in ["icons/icon-192.png", "icons/adaptive-"]:
+		if not fp_line.contains(want):
+			fail("build.yml's SHELL fingerprint does not hash %s" % want)
 	# the web loading page draws the same medal, its car on the orbit
 	var shell := FileAccess.get_file_as_string("res://web/shell_template.html")
 	for want in ["the medal logo", "id=\"orbit\"", "id=\"ring\"", "r=\"34.5\""]:
