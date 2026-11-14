@@ -36,6 +36,8 @@ signal tutorial_pressed   # replay the tutorial (settings screen)
 signal reset_pressed      # erase all progress (settings screen, confirmed with a second tap)
 signal reward_popped(i: int)  # a results badge (record, medal) just popped in: sound + buzz
 signal awards_pressed         # the trophy on the results screen: open the Awards screen
+signal offer_pressed(id: String)  # a rewarded-ad button on the results (x2 coins, Gold ghost...)
+signal no_ads_pressed         # the "No ads?" link under those buttons
 
 const MINIMAP := 110.0
 const C_PANEL := Color(0.035, 0.075, 0.082, 0.92)
@@ -437,6 +439,23 @@ func _build_results() -> void:
 	vb.add_child(res_table)
 	res_note = _label("", 14, Paper.INK_SOFT)
 	vb.add_child(res_note)
+	# rewarded-ad offers (x2 coins, Gold ghost, +1 attempt), each a button the player chooses
+	res_offers = HFlowContainer.new()
+	res_offers.add_theme_constant_override("h_separation", 8)
+	res_offers.add_theme_constant_override("v_separation", 6)
+	res_offers.visible = false
+	vb.add_child(res_offers)
+	res_noads = Button.new()
+	res_noads.flat = true
+	res_noads.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	res_noads.add_theme_font_override("font", f_med)
+	res_noads.add_theme_font_size_override("font_size", 13)
+	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		res_noads.add_theme_color_override(k, Paper.INK_SOFT)
+	res_noads.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	res_noads.pressed.connect(func(): no_ads_pressed.emit())
+	res_noads.visible = false
+	vb.add_child(res_noads)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	vb.add_child(row)
@@ -1194,10 +1213,13 @@ func hide_coach() -> void:
 # rewards: [{ text, col }], badges that pop in one after the other under the title
 # (new record, medal earned); the title bounces when there is any
 var res_rewards: HFlowContainer
+var res_offers: HFlowContainer
+var res_noads: Button
 var res_cup: Button
 var _res_tw: Tween
 func show_results(title: String, rows: Array, note: String, has_next := false, cols := 3, rewards: Array = []) -> void:
 	_show_rewards(rewards)
+	set_offers([])
 	res_cup.visible = false
 	for ch in results.get_children():
 		if ch.has_signal("finished"):   # an award show left from the last results
@@ -1292,7 +1314,37 @@ func _reward_badge(text: String, col: Color) -> PanelContainer:
 	l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	hb.add_child(l)
 	p.add_child(hb)
+	p.set_meta("label", l)
 	return p
+
+# change the words of results badge i (the coin badge after "x2 coins")
+func set_reward_text(i: int, text: String) -> void:
+	if i < res_rewards.get_child_count():
+		var b := res_rewards.get_child(i)
+		if b.has_meta("label"):
+			(b.get_meta("label") as Label).text = text
+
+# the rewarded-ad offers under the results: [{ id, text, icon, ready, busy }]. One that can't
+# play now is greyed with "No video right now", never an error. `no_ads` is the "No ads?" link
+# text ("" hides it).
+func set_offers(offers: Array, no_ads := "") -> void:
+	for ch in res_offers.get_children():
+		res_offers.remove_child(ch)
+		ch.queue_free()
+	for o in offers:
+		var ready: bool = o.get("ready", true)
+		var busy: bool = o.get("busy", false)
+		var txt: String = "Playing..." if busy else (String(o["text"]) if ready else "No video right now")
+		var b := icon_button(String(o.get("icon", "video")), txt, "card", false, 44)
+		b.set_meta("offer", o["id"])
+		b.disabled = busy or not ready
+		var id: String = o["id"]
+		b.pressed.connect(func(): offer_pressed.emit(id))
+		res_offers.add_child(b)
+		set_tile_on(b, false)
+	res_offers.visible = not offers.is_empty()
+	res_noads.text = no_ads
+	res_noads.visible = no_ads != "" and not offers.is_empty()
 
 static func fmt(t: float) -> String:
 	t = snappedf(t, 0.1)

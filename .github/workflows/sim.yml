@@ -42,6 +42,8 @@ jobs:
         run: ./godot --headless --path . --script tests/economy_test.gd
       - name: Ads, Store and monetization stubs (rewards, caps, full-screen pacing, No ads)
         run: ./godot --headless --path . --script tests/monetization_test.gd
+      - name: Rewarded-ad offers on the results (x2 coins)
+        run: ./godot --headless --path . --script tests/results_offers_test.gd
       - name: Medals are saved and shown (race wins, layout bumps)
         run: ./godot --headless --path . --script tests/medals_test.gd
       - name: Race results follow the finish line (Twin Bend case)

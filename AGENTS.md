@@ -71,6 +71,7 @@ godot --headless --path . --script tests/tutorial_test.gd  # the first-launch tu
 godot --headless --path . --script tests/cosmetics_test.gd  # garage items: prices, every look builds, looks only
 godot --headless --path . --script tests/economy_test.gd    # coins, Track of the day, awards, buying, progress reset
 godot --headless --path . --script tests/monetization_test.gd # ads/store stubs: rewards, daily caps, full-screen pacing, No ads
+godot --headless --path . --script tests/results_offers_test.gd # results ad offers: x2 coins once, caps, never in free runs
 godot --headless --path . --script tests/medals_test.gd     # medals saved and shown: race wins, layout bumps
 godot --headless --path . --script tests/race_results_test.gd # race results = order over the line, medal from it
 godot --headless --path . --script tests/attack_unlock_test.gd # Time attack tracks open with the campaign

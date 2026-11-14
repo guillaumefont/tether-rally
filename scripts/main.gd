@@ -22,6 +22,9 @@ const Daily = preload("res://scripts/daily.gd")
 const Awards = preload("res://scripts/awards.gd")
 const WorldUnlock = preload("res://scripts/world_unlock.gd")
 const AwardShow = preload("res://scripts/award_show.gd")
+const Ads = preload("res://scripts/ads.gd")
+const Store = preload("res://scripts/store.gd")
+const Monetization = preload("res://scripts/monetization.gd")
 
 var view: WorldView
 var ui: UI
@@ -54,6 +57,11 @@ var themes_before: Array = []   # themes unlocked when the race started
 var worlds_before: Array = []   # campaign worlds finished when the race started
 var awards_won: Array = []      # awards this run earned: their medallions play over the results
 var building := false        # a loading screen is building the next track
+# rewarded-ad offers on the results (docs/monetization.md)
+var pay_total := 0           # coins this run paid (medal + Daily Detour): what "x2 coins" doubles
+var offers_used := {}        # offers already taken on this results screen
+var offer_busy := ""         # the offer whose video is playing
+var results_n := 0           # counts results screens, so a late reward never touches a newer one
 var tutorial := false        # the run is the tutorial (Defs.TUTORIAL), driven by `tut`
 var tut: Tutorial = null
 # behind the menu: AI drivers race a snowy track, changing track every ATTRACT_SECS
@@ -89,6 +97,8 @@ func _ready() -> void:
 			_start_event(nx))
 	ui.menu_pressed.connect(func(): _with_loading("", _to_menu))
 	ui.awards_pressed.connect(func(): _with_loading("", _to_awards))
+	ui.offer_pressed.connect(_offer_pressed)
+	ui.no_ads_pressed.connect(func(): Store.buy("remove_ads", func(_r): _refresh_offers()))
 	ui.skip_pressed.connect(_leave_tutorial)
 	ui.tutorial_pressed.connect(start_tutorial)
 	# There is no boot splash image (project.godot: boot_splash/show_image=false): the game
@@ -790,6 +800,10 @@ static func _ordinal(n: int) -> String:
 
 func _show_results() -> void:
 	phase = "results"
+	pay_total = 0
+	offers_used = {}
+	offer_busy = ""
+	results_n += 1
 	ui.hide_streak()
 	ui.hide_lap_note()
 	if free_run:
@@ -836,6 +850,7 @@ func _show_results() -> void:
 		note = _pay(coins, daily, { "mode": "trial", "variant": variant, "finished": c.finished, "clean_laps": c.best_clean_laps,
 			"streak": c.best_streak, "hits": c.hits, "gems_all": track.tokens.size() > 0 and c.gems == track.tokens.size() }, rewards) + note
 		ui.show_results("New record" if new_record else "Time trial", rows, _unlock_note() + note, not ui.menu.next_event().is_empty(), 3, rewards)
+		_refresh_offers()
 		_world_moment()
 		_award_moment()
 		return
@@ -859,6 +874,7 @@ func _show_results() -> void:
 		rnote = _pay(Wallet.medal_coins(won["held"], tier), 0, { "mode": "race", "variant": variant, "finished": me.finished, "place": place,
 			"lead": lead, "clean_laps": me.best_clean_laps, "streak": me.best_streak, "hits": me.hits }, rrewards) + rnote
 	ui.show_results(title, rows2, _unlock_note() + rnote, not ui.menu.next_event().is_empty(), 3, rrewards)
+	_refresh_offers()
 	_world_moment()
 	_award_moment()
 
@@ -925,6 +941,7 @@ func _pay(medal_coins: int, daily: int, run: Dictionary, rewards: Array) -> Stri
 	var won := Awards.check(run)
 	awards_won = won   # each one gets its own medallion moment after the badges (_award_moment)
 	var total := medal_coins + daily
+	pay_total = total
 	var txt := ""
 	if total > 0:
 		rewards.push_front({ "text": "+%d COINS" % total, "col": Color("#f2c84a") })
@@ -935,6 +952,50 @@ func _pay(medal_coins: int, daily: int, run: Dictionary, rewards: Array) -> Stri
 	if not won.is_empty():
 		txt += "New award%s: collect %d coins in the Passport.  " % ["s" if won.size() > 1 else "", won.reduce(func(n, a): return n + int(a["coins"]), 0)]
 	return txt
+
+# ---------------------------------------------------------------- rewarded-ad offers
+const OFFER_TEXT := { "double_coins": "x2 coins", "gold_ghost": "Gold ghost", "daily_extra": "+1 scored attempt" }
+const OFFER_ICON := { "double_coins": "coin", "gold_ghost": "ghost", "daily_extra": "retry" }
+
+# what the offers rule (Monetization.results_offers) needs to know about this results screen
+func _offer_ctx() -> Dictionary:
+	return { "total": pay_total, "free": free_run, "tutorial": tutorial, "humans": humans, "used": offers_used }
+
+func _refresh_offers() -> void:
+	if phase != "results" or tutorial:
+		return
+	var list: Array = []
+	var free := Ads.ads_removed()
+	for id in Monetization.results_offers(_offer_ctx()):
+		list.append({ "id": id, "text": OFFER_TEXT.get(id, id), "icon": OFFER_ICON.get(id, "video") if free else "video",
+			"ready": Ads.rewarded_ready(id) or offer_busy == id, "busy": offer_busy == id })
+	var link := ""
+	if Store.available() and not free:
+		link = "No ads? %s" % Store.price("remove_ads")
+	ui.set_offers(list, link)
+
+func _offer_pressed(id: String) -> void:
+	if offer_busy != "" or offers_used.has(id):
+		return
+	offer_busy = id
+	_refresh_offers()
+	if not Ads.show_rewarded(id, _offer_granted.bind(id, pay_total, results_n)):
+		offer_busy = ""
+		_refresh_offers()
+
+# the video was watched (or "No ads" owns it): give the reward, even if the player has moved on
+func _offer_granted(id: String, total: int, screen: int) -> void:
+	var here := screen == results_n and phase == "results"
+	match id:
+		"double_coins":
+			Wallet.add(total)
+			if here:
+				ui.set_reward_text(0, "+%d x2 COINS" % total)
+				sfx.blip(1320, 0.2, "square", 0.05, 300)
+	if here:
+		offer_busy = ""
+		offers_used[id] = true
+		_refresh_offers()
 
 # Settings > Reset progress (confirmed there): coins, looks bought, awards, medals,
 # records, ghosts and the campaign start over. Options and paid packs stay.
@@ -1081,7 +1142,8 @@ func _run_demo(arg: String) -> void:
 			ui.hide_settings()
 			ui.menu.visible = false
 			ui.show_results("Time trial", [{ "cells": ["Fastest lap", "", "0:12.10"], "hl": true }], "+400 coins (medal 100, Daily Detour 100, Clean triple 150, Smooth operator 100): 1240 in all.", false, 3,
-				[{ "text": "+450 COINS", "col": Color("#f2c84a") }, { "text": "GOLD MEDAL", "col": Medals.COLORS[2] }])],
+				[{ "text": "+450 COINS", "col": Color("#f2c84a") }, { "text": "GOLD MEDAL", "col": Medals.COLORS[2] }])
+			phase = "results"; pay_total = 450; offers_used = {}; offer_busy = ""; _refresh_offers()],
 		["award_play", func(): show_awards_won([Awards.find("clean_laps"), Awards.find("first_pivot")])],
 		["award_done", func(): pass],
 		["award_fly", func(): pass],
