@@ -43,13 +43,23 @@ func _init() -> void:
 	if fg == null or fg.get_size() != Vector2i(432, 432):
 		fail("launcher foreground missing")
 	else:
-		# medal inside Android's safe zone (66 of 108): the corners stay clear
+		# the medal fills the launcher's visible circle (72 of 108 dp; Guillaume, 2026-11-14): the
+		# cream frame reaches past its edge, the corners (cut off by every mask) stay clear
 		if fg.get_pixel(40, 40).a > 0.01 or fg.get_pixel(392, 392).a > 0.01:
-			fail("launcher foreground spills outside the safe zone")
+			fail("launcher foreground fills the corners")
+		var edge := 216 - int(432.0 * 33.3 / 100.0) + 2
+		if fg.get_pixel(216, edge).a < 0.99 or fg.get_pixel(edge, 216).a < 0.99:
+			fail("launcher foreground does not reach the visible edge: the dark ring is back")
 		# the medal's frame is cream at its edge, its disc dark inside
-		var frame := fg.get_pixel(216, 216 - int(37 * 0.72 * 4.32))
+		var frame := fg.get_pixel(216, 216 - int(37 * Logo.ADAPTIVE_SCALE * 4.32))
 		if frame.get_luminance() < 0.6:
 			fail("launcher foreground: the frame is not cream (%s)" % frame.to_html())
+		if fg.get_pixel(216, 216 - int(25 * Logo.ADAPTIVE_SCALE * 4.32)).get_luminance() > 0.3:
+			fail("launcher foreground: the disc is not dark")
+	# the adaptive background is the frame's cream, so no dark ring shows round the medal
+	var abg := Image.load_from_file("res://icons/adaptive-background-432.png")
+	if abg == null or abg.get_pixel(5, 5).get_luminance() < 0.75:
+		fail("launcher background is not the cream: run tools/gen_icons.gd")
 	# the frame texture the game draws is the right size, dark in the middle, cream at the rim
 	var tex := Logo.medal_frame(200)
 	var fi := tex.get_image()

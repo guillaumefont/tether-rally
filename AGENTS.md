@@ -137,7 +137,9 @@ Only redo the ones where the change is visible, and put before/after images in t
 - Logo (Guillaume, 2026-11-14): "the medal", a round chalk-cream medal, dark inside, the amber car
   swinging round the tower seen from above with three speed trails. No background behind it
   (Guillaume, 2026-11-14): the icon is the medal on transparent; where an icon must be opaque (store
-  icon, Android adaptive background) it is one flat colour, `ICON_BG`. One source, `scripts/logo_art.gd` (SVG strings, -50..50 box): the
+  icon) it is one flat colour, `ICON_BG`. The Android adaptive icon is the medal filling the
+  launcher's visible circle (`ADAPTIVE_SCALE`) on its cream (`ADAPTIVE_BG`), so no dark ring shows
+  (Guillaume, 2026-11-14). One source, `scripts/logo_art.gd` (SVG strings, -50..50 box): the
   game draws its frame as a texture and the moving parts in code (`draw_medal`, used by the menu
   header `Logo` and the loading emblem/ring), and the web page `web/shell_template.html` repeats
   the same SVG. After changing it, run `tools/gen_icons.gd` (icon.svg, `icons/`, `store/icon-512.png`),
