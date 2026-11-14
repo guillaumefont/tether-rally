@@ -39,6 +39,7 @@ signal awards_pressed         # the trophy on the results screen: open the Award
 signal offer_pressed(id: String)  # a rewarded-ad button on the results (x2 coins, Gold ghost...)
 signal no_ads_pressed         # the "No ads?" link under those buttons, or Settings' NO ADS
 signal restore_pressed        # Settings: restore purchases
+signal starter_pressed        # the Starter pack card on the results
 signal privacy_pressed        # Settings: privacy choices (the ad consent form)
 
 const MINIMAP := 110.0
@@ -458,6 +459,11 @@ func _build_results() -> void:
 	res_noads.pressed.connect(func(): no_ads_pressed.emit())
 	res_noads.visible = false
 	vb.add_child(res_noads)
+	# the one-time Starter pack card
+	res_starter = icon_button("spark", "STARTER PACK", "card", false, 48)
+	res_starter.pressed.connect(func(): starter_pressed.emit())
+	res_starter.visible = false
+	vb.add_child(res_starter)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	vb.add_child(row)
@@ -682,7 +688,7 @@ func _make_options() -> Dictionary:
 	box.add_child(q)
 	o["quality"] = q
 	var grid := _grid(2)
-	for t in [["ghost", "GHOST", "ghost"], ["haptics", "VIBRATION", "vibrate"]]:
+	for t in [["ghost", "GHOST", "ghost"], ["haptics", "VIBRATION", "vibrate"], ["ideal_line", "IDEAL LINE", "standard"]]:
 		var b := icon_button(t[2], t[1], "card", false, 50)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.focus_mode = Control.FOCUS_NONE
@@ -727,7 +733,7 @@ func set_options(o: Dictionary, opts: Dictionary) -> void:
 		if b.visible:
 			_set_toggle(b, opts[key])
 			shown += 1
-	o["grid"].columns = maxi(1, shown)
+	o["grid"].columns = clampi(shown, 1, 2)
 	o["grid"].visible = shown > 0
 
 # ---------------------------------------------------------------- settings (home screen)
@@ -836,6 +842,37 @@ func _reset_arm(on: bool) -> void:
 	var l: Label = _reset_btn.get_meta("label")
 	l.text = "TAP AGAIN TO ERASE ALL PROGRESS" if on else "RESET PROGRESS"
 	l.add_theme_color_override("font_color", Paper.RED_INK if on else Paper.INK)
+
+# a small card over the menu: a title, a line, a main button and a way out
+var card_ov: Control
+func show_card(title: String, text: String, yes: String, icon: String, on_yes: Callable, no: String) -> void:
+	if card_ov:
+		card_ov.queue_free()
+	var r := _overlay()
+	card_ov = r[0]
+	var vb: VBoxContainer = r[1]
+	(r[2] as PanelContainer).custom_minimum_size.x = 420
+	_frost_panel(r[2])
+	_panel_header(vb, title.to_upper())
+	var l := _label(text, 15, Paper.INK)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vb.add_child(l)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	vb.add_child(row)
+	var b_no := icon_button("back", no, "card", false, 48)
+	b_no.pressed.connect(func(): card_ov.queue_free(); card_ov = null)
+	row.add_child(b_no)
+	var b_yes := icon_button(icon, yes, "go", false, 48)
+	b_yes.set_meta("card_yes", true)
+	b_yes.pressed.connect(func():
+		card_ov.queue_free()
+		card_ov = null
+		on_yes.call())
+	row.add_child(b_yes)
+	for b in row.get_children():
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		set_tile_on(b, false)
 
 # the stand-in for a full-screen ad in debug and preview builds: a dark card over everything
 var ad_card: ColorRect
@@ -1266,11 +1303,13 @@ func hide_coach() -> void:
 var res_rewards: HFlowContainer
 var res_offers: HFlowContainer
 var res_noads: Button
+var res_starter: Button
 var res_cup: Button
 var _res_tw: Tween
 func show_results(title: String, rows: Array, note: String, has_next := false, cols := 3, rewards: Array = []) -> void:
 	_show_rewards(rewards)
 	set_offers([])
+	set_starter("")
 	res_cup.visible = false
 	for ch in results.get_children():
 		if ch.has_signal("finished"):   # an award show left from the last results
@@ -1396,6 +1435,13 @@ func set_offers(offers: Array, no_ads := "") -> void:
 	res_offers.visible = not offers.is_empty()
 	res_noads.text = no_ads
 	res_noads.visible = no_ads != "" and not offers.is_empty()
+
+# the Starter pack card on the results ("" hides it)
+func set_starter(text: String) -> void:
+	res_starter.visible = text != ""
+	if text != "":
+		(res_starter.get_meta("label") as Label).text = text
+		set_tile_on(res_starter, false)
 
 static func fmt(t: float) -> String:
 	t = snappedf(t, 0.1)

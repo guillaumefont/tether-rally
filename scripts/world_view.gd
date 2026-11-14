@@ -53,6 +53,7 @@ var rotor_h := PackedFloat32Array()  # rotor height of each curve (world units)
 var car_nodes: Array = []  # per car: {root, body, tether, marker}
 var ghost_node: Node3D
 var gold_node: Node3D   # the Gold medal ghost (scripts/gold_ghosts.gd), beside the player's own
+var ideal_node: MeshInstance3D   # the ideal line: the Gold lap drawn on the road (one run)
 const COL_GOLD_GHOST := Color("#f2c84a")
 var post_nodes: Array = []
 var gem_nodes: Array = []
@@ -188,6 +189,7 @@ func _clear(tr: TrackData) -> void:
 	gem_nodes.clear()
 	ghost_node = null
 	gold_node = null
+	ideal_node = null
 	parts.clear()
 
 func _build_ground() -> void:
@@ -2769,6 +2771,72 @@ func setup_cars(race: Race, has_ghost: bool, looks := {}, has_gold := false) -> 
 		gold_node.visible = false
 		gold_node.set_meta("gold_ghost", true)
 		dyn_root.add_child(gold_node)
+
+# The ideal line (docs/monetization.md): the Gold ghost's path as a pale gold ribbon on the
+# road, with a mark where it hooks (gold) and lets go (chalk). Visual only, for one run.
+func show_ideal_line(trace: Array, hooks: Array) -> void:
+	clear_ideal_line()
+	if trace.size() < 3 or track == null:
+		return
+	var im := ImmediateMesh.new()
+	var m := mat(Color(COL_GOLD_GHOST, 0.5), true)
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.no_depth_test = false
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES, m)
+	var pts: Array = []
+	for v in trace:
+		var p := Vector2(v.x, v.y)
+		var nr := track.nearest_raw(p)
+		pts.append(w3(p, track.height_at(track.s_of(nr["i"], nr["t"])) + ROAD_Y + 3.0))
+	var hw := 7.0 * U
+	for i in pts.size() - 1:
+		var a: Vector3 = pts[i]
+		var b: Vector3 = pts[i + 1]
+		var d := b - a
+		if d.length() < 0.0001:
+			continue
+		var side := Vector3(-d.z, 0, d.x).normalized() * hw
+		for q in [a - side, a + side, b + side, a - side, b + side, b - side]:
+			im.surface_add_vertex(q)
+	im.surface_end()
+	# marks where the rope is hooked and let go
+	var mk := ImmediateMesh.new()
+	var mm := mat(Color(1, 1, 1, 0.9), true)
+	mm.vertex_color_use_as_albedo = true
+	mm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mk.surface_begin(Mesh.PRIMITIVE_TRIANGLES, mm)
+	var marks := 0
+	for i in range(1, mini(hooks.size(), pts.size())):
+		if hooks[i] == hooks[i - 1]:
+			continue
+		marks += 1
+		var c: Vector3 = pts[i] + Vector3(0, 0.5 * U, 0)
+		var col: Color = COL_GOLD_GHOST if hooks[i] else COL_CHALK
+		var r := 16.0 * U
+		for k in 12:
+			var a0 := TAU * k / 12.0
+			var a1 := TAU * (k + 1) / 12.0
+			for q in [c, c + Vector3(cos(a0), 0, sin(a0)) * r, c + Vector3(cos(a1), 0, sin(a1)) * r]:
+				mk.surface_set_color(col)
+				mk.surface_add_vertex(q)
+	if marks > 0:
+		mk.surface_end()
+	ideal_node = MeshInstance3D.new()
+	ideal_node.mesh = im
+	ideal_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ideal_node.set_meta("ideal_line", true)
+	ideal_node.set_meta("marks", marks)
+	if marks > 0:
+		var mki := MeshInstance3D.new()
+		mki.mesh = mk
+		mki.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ideal_node.add_child(mki)
+	dyn_root.add_child(ideal_node)
+
+func clear_ideal_line() -> void:
+	if ideal_node and is_instance_valid(ideal_node):
+		ideal_node.queue_free()
+	ideal_node = null
 
 func car_height(race: Race, c) -> float:
 	var base := track.height_at(c.s)

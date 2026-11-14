@@ -141,6 +141,30 @@ func _run() -> void:
 	expect(Store.owns("remove_ads"), true, "No ads kept after Reset progress")
 	expect(M.used_today("double_coins"), 0, "ad counters cleared by Reset progress")
 
+	# ---- the Starter pack: No ads + Neon pack + 1000 coins; coin packs can be bought again
+	Store._cfg = ConfigFile.new()
+	Wallet.reset()
+	expect(M.starter_for_sale(), true, "Starter pack for sale on a fresh save")
+	expect(M.starter_card_due(false), false, "no Starter card before %d races" % M.STARTER_AFTER_RACES)
+	Wallet.set_v("ads", "races", M.STARTER_AFTER_RACES)
+	expect(M.starter_card_due(true), false, "never over a medal or award moment")
+	expect(M.starter_card_due(false), true, "Starter card after %d races" % M.STARTER_AFTER_RACES)
+	M.starter_card_shown()
+	expect(M.starter_card_due(false), false, "the card shows once")
+	Store.buy("starter_pack", func(r): res[0] = r)
+	expect([res[0], Store.owns("remove_ads"), Store.owns("neon_pack"), Wallet.coins()], ["ok", true, true, 1000], "Starter pack holds No ads, Neon and 1000 coins")
+	expect(Ads.ads_removed(), true, "Starter pack removes ads")
+	expect(M.starter_for_sale(), false, "Starter pack no longer for sale")
+	Store._cfg = ConfigFile.new()
+	Store.buy("neon_pack")
+	expect(M.starter_for_sale(), false, "not sold to someone with the Neon pack")
+	Wallet.reset()
+	Store.buy("coins_s", func(r): res[0] = r)
+	Store.buy("coins_s", func(r): res[0] = r)
+	expect([res[0], Wallet.coins(), Store.owns("coins_s")], ["ok", 3000, false], "coin packs add coins each time")
+	Store._cfg = ConfigFile.new()
+	Wallet.reset()
+
 	# ---- every product the Garage sells is a real Store product with a price
 	for id in Store.PRODUCTS:
 		if Store.price(id) == "" or Store.product(id)["name"] == "":

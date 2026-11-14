@@ -5,6 +5,7 @@
 #   with none left the banner starts practice (no coins); a video adds one
 # - full-screen ads when leaving the results: none in the first session, before 6 races, after
 #   the tutorial, Off the Map or with No ads; then one every 4 races, a test card meanwhile
+# - ideal line: offered after a run without Gold, drawn (with hook marks) for the next run only
 # - "x2 coins": the wallet gets the run's coins a second time, once per results screen; the
 #   badge says so; the daily cap holds; never after Off the Map, the tutorial or a 2-player race
 #   godot --headless --path . --script tests/results_offers_test.gd
@@ -190,6 +191,20 @@ func _run() -> void:
 	# Reset progress closes it again
 	Wallet.reset()
 	check(not GoldGhosts.unlocked(name, "standard"), "Reset progress closes unlocked Gold ghosts")
+
+	# ---- the ideal line: offered after a run without Gold, drawn for the next run only
+	Wallet.reset()
+	Records.reset()
+	await start(ev)
+	await finish_trial(silver - 0.05)
+	check(offers().has("ideal_line"), "ideal line offered after a run without Gold (%s)" % str(offers()))
+	offer_btn("ideal_line").pressed.emit()
+	await frames(2)
+	await start(ev)
+	var il = main.view.ideal_node
+	check(il != null and int(il.get_meta("marks", 0)) > 0, "the next run shows the ideal line, with hook marks")
+	await start(ev)
+	check(main.view.ideal_node == null, "only for one run")
 
 	# ---- Daily Detour: scored attempts from the banner only
 	Wallet.reset()

@@ -143,6 +143,11 @@ Only redo the ones where the change is visible, and put before/after images in t
   Play product, AdMob app or ad unit.
 - Export presets: "Android" is the test APK (CI adds `preview,self_update`), "Web" gets `preview` in CI, and
   "Android Play" is the store AAB (Gradle): never give it `preview` or `self_update` (`tests/store_build_test.gd`).
+- Shop: the Garage lists what is for sale under the swatches (Starter pack, No ads, coin packs); a bundle's
+  contents count as owned (`Store.owns` checks `includes`); coin packs are consumables that pay coins each time.
+- A GDScript parse error in `main.gd` (e.g. `:=` on an untyped value) makes every `SceneTree` test that
+  loads `main.tscn` hang instead of failing, and `--import` doesn't report it: run tests under `timeout`
+  and grep their output for `SCRIPT ERROR`.
 - Tests: `Daily.fake_day` and `Monetization.fake_now` fake the date and clock. A `SceneTree` test that
   leaves lambdas in a static var (e.g. `Store.on_changed`) aborts at exit: clear them before `quit()`.
 

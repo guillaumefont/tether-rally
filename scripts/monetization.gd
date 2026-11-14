@@ -7,6 +7,7 @@ extends RefCounted
 const Wallet = preload("res://scripts/wallet.gd")
 const Daily = preload("res://scripts/daily.gd")
 const Settings = preload("res://scripts/settings.gd")
+const Store = preload("res://scripts/store.gd")
 
 # rewarded ads
 const DOUBLE_COINS_PER_DAY := 10    # "x2 coins" on the results
@@ -60,7 +61,23 @@ static func results_offers(ctx: Dictionary) -> Array:
 		out.append("gold_ghost")
 	if ctx.get("daily_extra", false) and not used.has("daily_extra") and left_today("daily_extra") > 0:
 		out.append("daily_extra")
+	if ctx.get("ideal_line", false) and not used.has("ideal_line"):
+		out.append("ideal_line")
 	return out
+
+# ---------------------------------------------------------------- Starter pack
+# sold to players who own neither No ads nor the Neon pack (one product only, no variant)
+static func starter_for_sale() -> bool:
+	return Store.available() and not Store.owns("remove_ads") and not Store.owns("neon_pack")
+
+# the one-time card on the results: after STARTER_AFTER_RACES finished races, never on a
+# screen with a medal, award or world moment (`moment`), once only
+static func starter_card_due(moment: bool) -> bool:
+	return starter_for_sale() and not moment and not bool(Wallet.get_v("ads", "starter_shown", false)) \
+		and int(Wallet.get_v("ads", "races", 0)) >= STARTER_AFTER_RACES
+
+static func starter_card_shown() -> void:
+	Wallet.set_v("ads", "starter_shown", true)
 
 # ---------------------------------------------------------------- full-screen ad pacing
 # app launches, counted at boot: the first session never sees a full-screen ad
