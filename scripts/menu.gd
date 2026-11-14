@@ -639,9 +639,11 @@ static func daily_status() -> String:
 	var left := Daily.attempts_left()
 	if left <= 0:
 		return "Practice"
+	var st := Daily.streak()
+	var tail := "  ·  streak %d" % st if st >= 2 else ""
 	if Daily.paid_tier() < 0:
-		return "%d attempt%s  ·  +%d coins" % [left, "" if left == 1 else "s", Daily.BASE]
-	return "%d attempt%s left" % [left, "" if left == 1 else "s"]
+		return "%d attempt%s  ·  +%d coins%s" % [left, "" if left == 1 else "s", Daily.BASE, tail]
+	return "%d attempt%s left%s" % [left, "" if left == 1 else "s", tail]
 
 # the line under the Daily Detour's event page: attempts and today's best
 static func daily_attempts_line() -> String:

@@ -86,6 +86,37 @@ func _init() -> void:
 	Daily.fake_day = dd + 1
 	expect(Daily.attempts_left(), 3, "three again the next day")
 	expect(Daily.best_today(), -1.0, "no best yet the next day")
+	# streak: a day counts once a scored attempt is finished; bonus on days 3 and 7, then every 7
+	Wallet.set_v("daily", "streak", 0)
+	Wallet.set_v("daily", "streak_day", -999999)
+	var sd := Daily.day_of(2026, 12, 1)
+	var got := []
+	for k in 3:
+		Daily.fake_day = sd + k
+		got.append(Daily.count_streak_day())
+	expect(got, [0, 0, 50], "streak bonus on day 3")
+	expect(Daily.count_streak_day(), 0, "a day counts once")
+	expect(Daily.streak(), 3, "three-day streak")
+	Daily.fake_day = sd + 3   # day 4 missed
+	Daily.fake_day = sd + 4
+	expect(Daily.streak_save_offer(), true, "one missed day can be saved")
+	Daily.save_streak()
+	expect(Daily.count_streak_day(), 0, "saved: day 4 of the streak")
+	expect(Daily.streak(), 4, "the streak goes on after a save")
+	Daily.fake_day = sd + 6   # day 6 missed
+	expect(Daily.streak_save_offer(), false, "one save per 7 days")
+	expect(Daily.count_streak_day(), 0, "unsaved: the streak starts again")
+	expect(Daily.streak(), 1, "back to 1")
+	for k in range(1, 14):
+		Daily.fake_day = sd + 6 + k
+		var b := Daily.count_streak_day()
+		if k + 1 == 7:
+			expect(b, 150, "streak bonus on day 7")
+		elif k + 1 == 14:
+			expect(b, 150, "streak bonus on day 14")
+	Daily.fake_day = sd + 30
+	expect(Daily.streak(), 0, "an old streak is gone")
+	expect(Daily.streak_save_offer(), false, "too old to save")
 	Daily.fake_day = -1
 	# buying
 	var signal_paint := Cosmetics.find("paint", "signal")

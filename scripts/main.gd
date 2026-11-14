@@ -52,6 +52,7 @@ var last_beep := 4
 var end_timer := 0.0
 var ghost: Array = []
 var gold_ghost: Array = []   # the Gold medal ghost, once unlocked for this track + variant
+var ideal_next := false      # the ideal line was won for the next run (a rewarded video)
 var new_record := false
 var touch_owner := {}        # touch index -> player
 var paused := false
@@ -65,6 +66,7 @@ var offers_used := {}        # offers already taken on this results screen
 var offer_busy := ""         # the offer whose video is playing
 var results_n := 0           # counts results screens, so a late reward never touches a newer one
 var gold_offer := false      # these results may offer the Gold ghost (a Time trial run without Gold)
+var ideal_offer := false     # ...and the ideal line for the next run
 # Daily Detour (docs/monetization.md): only a run started from its banner counts
 var daily_run := false       # this event is the Daily Detour
 var daily_scored := false    # ...and this run uses a scored attempt (else it is practice)
@@ -109,6 +111,11 @@ func _ready() -> void:
 		sh["note"] = "PURCHASES RESTORED" if r == "ok" else "STORE NOT AVAILABLE"
 		ui.set_shop(sh)))
 	ui.privacy_pressed.connect(func(): Ads.show_privacy_form())
+	ui.starter_pressed.connect(func(): Store.buy("starter_pack", func(r):
+		if r == "ok":
+			ui.set_starter("")
+			ui.res_note.text = "Starter pack: no more ads, the Neon pack is in the Garage, +%d coins. Thank you!" % int(Store.product("starter_pack")["coins"])
+		_refresh_offers()))
 	ui.awards_pressed.connect(func(): _with_loading("", _to_awards))
 	ui.offer_pressed.connect(_offer_pressed)
 	ui.no_ads_pressed.connect(func(): Store.buy("remove_ads", func(_r): _refresh_offers(); ui.set_shop(_shop())))
@@ -151,6 +158,20 @@ func _ready() -> void:
 		start_tutorial()
 	else:
 		_fade_in_later()
+		if not scripted:
+			_streak_card()
+
+# launch: a Daily Detour streak that missed exactly one day can be saved with a video
+func _streak_card() -> void:
+	if not Daily.streak_save_offer() or not Ads.rewarded_ready("streak_save"):
+		return
+	var n := int(Wallet.get_v("daily", "streak", 0))
+	ui.show_card("Save my streak", "You missed yesterday's Daily Detour. Your %d-day streak ends unless you save it." % n,
+		"SAVE MY STREAK", "ghost" if Ads.ads_removed() else "video",
+		func(): Ads.show_rewarded("streak_save", func():
+			Daily.save_streak()
+			if ui.menu.screen == "home":
+				ui.menu.show_home()), "NO THANKS")
 
 # true when this is the app starting up (main is the scene the engine launched), not a
 # test or tool that instantiated main.tscn itself
@@ -329,6 +350,7 @@ func _options(with_ghost: bool) -> Dictionary:
 		"ghost": Settings.get_opt("ghost") if with_ghost else null,
 		"haptics": Settings.get_opt("haptics") if Haptics.available() else null,
 		"quality": Settings.get_opt("quality"),
+		"ideal_line": Settings.get_opt("ideal_line", false) if Ads.ads_removed() else null,
 		"shop": _shop(),
 	}
 
@@ -419,6 +441,14 @@ func new_race(built: TrackData = null) -> void:
 	var nm: String = cur_def()["name"]
 	gold_ghost = GoldGhosts.trace(nm, variant) if mode == "trial" and not tutorial and humans == 1 and GoldGhosts.unlocked(nm, variant) else []
 	view.setup_cars(race, mode == "trial" and not tutorial, _dress(race), not gold_ghost.is_empty())
+	# the ideal line: for one run after its video, or always with No ads and its Settings option
+	var ideal: bool = mode == "trial" and not tutorial and humans == 1 and GoldGhosts.has(nm, variant) \
+		and (ideal_next or (Ads.ads_removed() and Settings.get_opt("ideal_line", false)))
+	ideal_next = false
+	if ideal:
+		view.show_ideal_line(GoldGhosts.trace(nm, variant), GoldGhosts.hooked(nm, variant))
+	else:
+		view.clear_ideal_line()
 	# your vehicle in this world sets the engine sound
 	sfx.set_vehicle(WorldView.body_id(Cosmetics.player_look(), String(view.th["kit"])))
 	new_record = false
@@ -832,6 +862,7 @@ func _show_results() -> void:
 	offers_used = {}
 	offer_busy = ""
 	gold_offer = false
+	ideal_offer = false
 	results_n += 1
 	ui.hide_streak()
 	ui.hide_lap_note()
@@ -874,11 +905,17 @@ func _show_results() -> void:
 		var run_tier := Medals.trial_tier(name, variant, run_val) if c.finished else 0
 		var coins := Wallet.medal_coins(start_tier, run_tier)
 		gold_offer = GoldGhosts.offer(name, variant, c.finished, run_tier, maxi(start_tier, tier))
+		ideal_offer = GoldGhosts.has(name, variant) and c.finished and maxi(start_tier, tier) < 3 and not Ads.ads_removed()
 		var daily := 0
 		attempt_live = false
+		var streak_coins := 0
 		if c.finished and daily_scored:
 			daily = Daily.claim(run_tier)
 			Daily.note_time(run_val)
+			streak_coins = Daily.count_streak_day()
+			daily += streak_coins
+			if streak_coins > 0:
+				note += " Daily Detour streak: day %d, +%d coins." % [Daily.streak(), streak_coins]
 		if daily_run and not daily_scored:
 			coins = 0   # Daily Detour practice pays nothing
 		note = _pay(coins, daily, { "mode": "trial", "variant": variant, "finished": c.finished, "clean_laps": c.best_clean_laps,
@@ -892,6 +929,7 @@ func _show_results() -> void:
 		_refresh_offers()
 		if _counts_for_ads():
 			Monetization.note_race()
+		_starter_card(rewards)
 		_world_moment()
 		_award_moment()
 		return
@@ -918,6 +956,7 @@ func _show_results() -> void:
 	_refresh_offers()
 	if _counts_for_ads():
 		Monetization.note_race()
+	_starter_card(rrewards)
 	_world_moment()
 	_award_moment()
 
@@ -996,6 +1035,18 @@ func _pay(medal_coins: int, daily: int, run: Dictionary, rewards: Array) -> Stri
 		txt += "New award%s: collect %d coins in the Passport.  " % ["s" if won.size() > 1 else "", won.reduce(func(n, a): return n + int(a["coins"]), 0)]
 	return txt
 
+# the one-time Starter pack card: not on a screen with a medal, award or new world
+func _starter_card(rewards: Array) -> void:
+	if not _counts_for_ads():
+		return
+	var moment := not awards_won.is_empty() or rewards.any(func(r): return String(r["text"]).ends_with("MEDAL"))
+	for c in Campaign.CHAPTERS.size():
+		if Campaign.chapter_done(c) and not worlds_before.has(c):
+			moment = true
+	if Monetization.starter_card_due(moment):
+		Monetization.starter_card_shown()
+		ui.set_starter("STARTER PACK  ·  NO ADS + NEON + 1000 COINS  ·  %s" % Store.price("starter_pack"))
+
 # ---------------------------------------------------------------- full-screen ads
 # a finished run that counts toward the full-screen ad pacing: not the tutorial (it has its
 # own end screen), Off the Map, Daily Detour practice or a 2-player race
@@ -1035,13 +1086,13 @@ func _drop_attempt() -> void:
 		Daily.give_back_attempt()
 
 # ---------------------------------------------------------------- rewarded-ad offers
-const OFFER_TEXT := { "double_coins": "x2 COINS", "gold_ghost": "GOLD GHOST", "daily_extra": "+1 SCORED ATTEMPT" }
-const OFFER_ICON := { "double_coins": "coin", "gold_ghost": "ghost", "daily_extra": "retry" }
+const OFFER_TEXT := { "double_coins": "x2 COINS", "gold_ghost": "GOLD GHOST", "daily_extra": "+1 SCORED ATTEMPT", "ideal_line": "IDEAL LINE" }
+const OFFER_ICON := { "double_coins": "coin", "gold_ghost": "ghost", "daily_extra": "retry", "ideal_line": "standard" }
 
 # what the offers rule (Monetization.results_offers) needs to know about this results screen
 func _offer_ctx() -> Dictionary:
 	return { "total": pay_total, "free": free_run, "tutorial": tutorial, "humans": humans, "used": offers_used, "gold_ghost": gold_offer,
-		"daily_extra": daily_run and Daily.attempts_left() <= 0 }
+		"daily_extra": daily_run and Daily.attempts_left() <= 0, "ideal_line": ideal_offer and not ideal_next }
 
 func _refresh_offers() -> void:
 	if phase != "results" or tutorial:
@@ -1074,6 +1125,10 @@ func _offer_granted(id: String, total: int, screen: int) -> void:
 			if here:
 				ui.set_reward_text(0, "+%d x2 COINS" % total)
 				sfx.blip(1320, 0.2, "square", 0.05, 300)
+		"ideal_line":
+			ideal_next = true
+			if here:
+				ui.res_note.text = "Ideal line on for your next run: the Gold lap is drawn on the road, with marks where it hooks and lets go. Tap Again."
 		"daily_extra":
 			Daily.add_extra()
 			if here:

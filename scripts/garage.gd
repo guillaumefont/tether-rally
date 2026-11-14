@@ -6,6 +6,7 @@ extends BoxContainer
 
 const Cosmetics = preload("res://scripts/cosmetics.gd")
 const Store = preload("res://scripts/store.gd")
+const Monetization = preload("res://scripts/monetization.gd")
 const Wallet = preload("res://scripts/wallet.gd")
 const Campaign = preload("res://scripts/campaign.gd")
 const WorldView = preload("res://scripts/world_view.gd")
@@ -38,6 +39,7 @@ var status: Label
 var buy_btn: Button
 var tab_btns := {}
 var grid: GridContainer
+var shop_box: VBoxContainer   # under the swatches: No ads, the Starter pack, coin packs
 
 func setup(owner_menu, scroller_class) -> void:
 	menu = owner_menu
@@ -114,7 +116,11 @@ func setup(owner_menu, scroller_class) -> void:
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
 	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 10)
 	list.add_child(grid)
+	shop_box = VBoxContainer.new()
+	shop_box.add_theme_constant_override("separation", 8)
+	list.add_child(shop_box)
 	var pad := Control.new()
 	pad.custom_minimum_size.y = 8
 	list.add_child(pad)
@@ -167,6 +173,46 @@ func _show_tab() -> void:
 			return
 	_restage()
 	_update_status()
+	_build_shop()
+
+# the shop under the swatches (docs/monetization.md): what the player doesn't own yet
+const SHOP := ["starter_pack", "remove_ads", "coins_s", "coins_m"]
+func _build_shop() -> void:
+	for ch in shop_box.get_children():
+		ch.queue_free()
+	if not Store.available():
+		return
+	var items: Array = SHOP.filter(func(id):
+		if id == "starter_pack":
+			return Monetization.starter_for_sale()
+		return Store.consumable(id) or not Store.owns(id))
+	if items.is_empty():
+		return
+	shop_box.add_child(ui._label("Shop", 15, C_FG, ui.f_bold))
+	for id in items:
+		var pr := Store.product(id)
+		var icon := "coin" if Store.consumable(id) else "spark"
+		var b: Button = ui.icon_button(icon, "%s  ·  %s" % [String(pr["name"]).to_upper(), Store.price(id)], "card", false, 44)
+		b.set_meta("shop", id)
+		b.tooltip_text = pr["desc"]
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.pressed.connect(func():
+			if buying:
+				return
+			buying = true
+			status.text = "Opening the store..."
+			Store.buy(id, func(res):
+				buying = false
+				if res == "ok" or res == "owned":
+					_show_tab()
+					status.text = "%s: thank you!" % pr["name"]
+					if on_coins.is_valid():
+						on_coins.call()
+				else:
+					status.text = { "cancelled": "Purchase cancelled.", "unavailable": "The store isn't open yet." }.get(res, "The purchase didn't go through. Try again later.")))
+		shop_box.add_child(b)
+		var d: Label = ui._label(pr["desc"], 12, C_MUTED)
+		shop_box.add_child(d)
 
 func _pick(it: Dictionary) -> void:
 	if tab == "body":

@@ -126,3 +126,47 @@ static func best_today() -> float:
 static func note_time(t: float) -> void:
 	if t > 0.0 and (best_today() < 0.0 or t < best_today()):
 		_set_att("best", t)
+
+# ---------------------------------------------------------------- streak
+# A day counts once a scored attempt is finished. Bonus coins on days 3 and 7, then every 7
+# days. One missed day can be saved (a rewarded ad, at most once per STREAK_SAVE_EVERY_DAYS);
+# otherwise the streak starts again at 1. The day is the device's (no server).
+static func streak() -> int:
+	var last := int(Wallet.get_v("daily", "streak_day", -999999))
+	if last == today() or last == today() - 1:
+		return int(Wallet.get_v("daily", "streak", 0))
+	return 0
+
+# coins for reaching day n of a streak
+static func streak_bonus(n: int) -> int:
+	var b: Dictionary = load("res://scripts/monetization.gd").STREAK_BONUS
+	if b.has(n):
+		return int(b[n])
+	if n > 7 and n % 7 == 0:
+		return int(b[7])
+	return 0
+
+# a scored attempt was finished today: count the day (once) and pay its bonus
+static func count_streak_day() -> int:
+	var last := int(Wallet.get_v("daily", "streak_day", -999999))
+	if last == today():
+		return 0
+	var n := int(Wallet.get_v("daily", "streak", 0)) + 1 if last == today() - 1 else 1
+	Wallet.set_v("daily", "streak", n)
+	Wallet.set_v("daily", "streak_day", today())
+	var coins := streak_bonus(n)
+	Wallet.add(coins)
+	return coins
+
+# exactly one day was missed and a save is allowed: offer "Save my streak"
+static func streak_save_offer() -> bool:
+	var last := int(Wallet.get_v("daily", "streak_day", -999999))
+	var every := int(load("res://scripts/monetization.gd").STREAK_SAVE_EVERY_DAYS)
+	var saved := int(Wallet.get_v("daily", "saved_day", -999999))
+	return last == today() - 2 and int(Wallet.get_v("daily", "streak", 0)) >= 2 and today() - saved >= every
+
+# the save: the missed day is bridged, the streak goes on today
+static func save_streak() -> void:
+	if streak_save_offer():
+		Wallet.set_v("daily", "streak_day", today() - 1)
+		Wallet.set_v("daily", "saved_day", today())
