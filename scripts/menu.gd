@@ -24,6 +24,7 @@ const Daily = preload("res://scripts/daily.gd")
 const Awards = preload("res://scripts/awards.gd")
 const AwardMedal = preload("res://scripts/award_medal.gd")
 const Paper = preload("res://scripts/paper.gd")
+const Ads = preload("res://scripts/ads.gd")
 # world card pictures: the land of each theme, no track (tools/gen_loading_art.gd ART_SCENERY=1)
 const WORLD_ART := {
 	"snow": preload("res://art/world_snow.jpg"), "forest": preload("res://art/world_forest.jpg"),
@@ -633,6 +634,24 @@ func _off_map_link(tall: bool) -> Button:
 	b.pressed.connect(func(): kind = "custom"; _list_scroll.erase("custom"); show_custom())
 	return b
 
+# the Daily Detour's state in a few words, for its banner: attempts left, or practice
+static func daily_status() -> String:
+	var left := Daily.attempts_left()
+	if left <= 0:
+		return "Practice"
+	if Daily.paid_tier() < 0:
+		return "%d attempt%s  ·  +%d coins" % [left, "" if left == 1 else "s", Daily.BASE]
+	return "%d attempt%s left" % [left, "" if left == 1 else "s"]
+
+# the line under the Daily Detour's event page: attempts and today's best
+static func daily_attempts_line() -> String:
+	var left := Daily.attempts_left()
+	var best := Daily.best_today()
+	var txt := "%d of %d scored attempts left" % [left, Daily.attempts_total()] if left > 0 else "No scored attempts left today: practice"
+	if best > 0.0:
+		txt += "  ·  best today %s" % load("res://scripts/ui.gd").fmt2(best)
+	return txt
+
 # Track of the day: a photo of its world taped onto the page, its name and what it pays;
 # tap it for its Event screen
 func _daily_banner() -> Button:
@@ -672,13 +691,7 @@ func _daily_banner() -> Button:
 	name.clip_text = true
 	tv.add_child(name)
 	var paid := Daily.paid_tier()
-	var right := ""
-	if paid < 0:
-		right = "+%d coins" % Daily.BASE
-	elif paid < Medals.NAMES.size():
-		right = "Done  ·  +%d / medal" % Daily.PER_TIER
-	else:
-		right = "Done"
+	var right := daily_status()
 	var foot := HBoxContainer.new()
 	foot.add_theme_constant_override("separation", 6)
 	foot.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1463,8 +1476,9 @@ func show_event() -> void:
 			sub = "%s  ·  %d laps" % [d["note"], int(d.get("laps", 3))]
 		"daily":
 			var paid := Daily.paid_tier()
+			var left := Daily.attempts_left()
 			sub = "Daily Detour  ·  %s  ·  %s" % [_variant_name(ev["variant"]),
-				"+%d coins, +%d per medal" % [Daily.BASE, Daily.PER_TIER] if paid < 0 else "done today, a better medal pays +%d" % Daily.PER_TIER]
+				("practice: no coins today" if left <= 0 else ("+%d coins, +%d per medal" % [Daily.BASE, Daily.PER_TIER] if paid < 0 else "a better medal pays +%d" % Daily.PER_TIER))]
 		"versus": sub = "Two for the Road  ·  %d laps" % int(d.get("laps", 3))
 	var eh := _header(vb, d["name"], sub, func(): go_back())
 	if ev["kind"] == "attack":
@@ -1532,7 +1546,17 @@ func show_event() -> void:
 	var fill := Control.new()
 	fill.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right.add_child(fill)
-	var go: Button = ui.icon_button("play", "START", "go", false, 58)
+	if ev["kind"] == "daily":
+		right.add_child(ui._label(daily_attempts_line(), 14, C_MUTED, ui.f_bold))
+		if Daily.attempts_left() <= 0 and Ads.rewarded_ready("daily_extra"):
+			var ex: Button = ui.icon_button("retry" if Ads.ads_removed() else "video", "+1 SCORED ATTEMPT", "card", false, 44)
+			ex.set_meta("daily_extra", true)
+			ex.pressed.connect(func():
+				ex.disabled = true
+				if not Ads.show_rewarded("daily_extra", func(): Daily.add_extra(); if is_inside_tree() and screen == "event": show_event()):
+					ex.disabled = false)
+			right.add_child(ex)
+	var go: Button = ui.icon_button("play", "PRACTICE" if ev["kind"] == "daily" and Daily.attempts_left() <= 0 else "START", "go", false, 58)
 	go.pressed.connect(func(): start_event.emit(ev.duplicate()))
 	# room for its block shadow: the swipe pager clips at its edges
 	var gm := MarginContainer.new()

@@ -1,6 +1,8 @@
 # Rewarded-ad offers on the results screen (docs/monetization.md):
 # - Gold ghost: one per track for Standard/Reverse/Obstacles (not Collect) lapping at the Gold
 #   time; offered after a run without Gold, unlocked for good by the video, not after a Gold run
+# - Daily Detour: an attempt is used at GO, given back by a first-lap quit, only from the banner;
+#   with none left the banner starts practice (no coins); a video adds one
 # - "x2 coins": the wallet gets the run's coins a second time, once per results screen; the
 #   badge says so; the daily cap holds; never after Off the Map, the tutorial or a 2-player race
 #   godot --headless --path . --script tests/results_offers_test.gd
@@ -55,6 +57,12 @@ func finish_trial(lap: float) -> void:
 	main._trial_run(me)
 	main._show_results()
 	await frames(2)
+
+# the countdown runs out: GO
+func go() -> void:
+	main.countdown = 0.1
+	for i in 3:
+		await process_frame
 
 func _initialize() -> void:
 	_run()
@@ -180,6 +188,57 @@ func _run() -> void:
 	# Reset progress closes it again
 	Wallet.reset()
 	check(not GoldGhosts.unlocked(name, "standard"), "Reset progress closes unlocked Gold ghosts")
+
+	# ---- Daily Detour: scored attempts from the banner only
+	Wallet.reset()
+	Records.reset()
+	var dday := Daily.day_of(2026, 11, 20)
+	Daily.fake_day = dday
+	var p: Dictionary = Daily.current()
+	var dev := { "track": p["track"], "variant": p["variant"], "mode": "trial", "humans": 1, "kind": "daily", "idx": 0, "theme": "" }
+	var dname: String = Defs.TRACKS[p["track"]]["name"]
+	var dgold: float = Medals.targets(dname, p["variant"])[2]
+	# the same track from Special Stages uses no attempt and pays no Daily Detour coins
+	await start({ "track": p["track"], "variant": p["variant"], "mode": "trial", "humans": 1, "kind": "attack", "idx": 0, "theme": "" })
+	await go()
+	await finish_trial(dgold + 5.0)
+	check(Daily.attempts_left() == 3 and Daily.paid_tier() < 0, "Special Stages on the daily track uses nothing")
+	# a quit in the first lap gives the attempt back
+	await start(dev)
+	check(main.daily_scored, "a banner run is scored")
+	await go()
+	check(Daily.attempts_left() == 2, "the attempt is used at GO")
+	main._pause_action("restart")
+	await frames(2)
+	check(Daily.attempts_left() == 3, "a restart in the first lap gives it back")
+	# a quit later on uses it
+	await go()
+	main.race.cars[0].lap = 2
+	main._to_menu()
+	check(Daily.attempts_left() == 2, "a quit after the first lap uses it")
+	# two finished attempts pay; the best counts
+	for k in 2:
+		await start(dev)
+		await go()
+		await finish_trial(dgold + 1.0 - k)
+	check(Daily.attempts_left() == 0, "three attempts used")
+	check(Daily.paid_tier() >= 0 and Daily.best_today() > 0.0, "scored runs pay and set today's best")
+	check(offers().has("daily_extra"), "+1 scored attempt offered with none left (%s)" % str(offers()))
+	# a 4th run is practice: no coins
+	var c4 := Wallet.coins()
+	var best4 := Daily.best_today()
+	await start(dev)
+	check(not main.daily_scored, "with none left the banner starts practice")
+	await go()
+	await finish_trial(dgold - 0.5)
+	check(Wallet.coins() == c4 and main.pay_total == 0, "practice pays nothing (%d)" % (Wallet.coins() - c4))
+	check(Daily.best_today() == best4, "practice sets no daily best")
+	# the ad gives one more scored attempt
+	offer_btn("daily_extra").pressed.emit()
+	await frames(2)
+	check(Daily.attempts_left() == 1, "+1 scored attempt after the video")
+	Daily.fake_day = dday + 1
+	check(Daily.attempts_left() == 3, "three again the next day")
 
 	# put things back
 	Daily.fake_day = -1

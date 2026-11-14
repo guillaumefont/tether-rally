@@ -84,3 +84,45 @@ static func claim(run_tier: int) -> int:
 		Wallet.set_v("daily", "tier", maxi(run_tier, paid))
 	Wallet.add(n)
 	return n
+
+# ---------------------------------------------------------------- scored attempts
+# (docs/monetization.md) A day has DAILY_ATTEMPTS scored runs, started from the Daily Detour
+# banner; the best counts (claim() already pays only an improvement). An attempt is used when
+# the countdown ends; a quit or restart during the first lap gives it back. With none left the
+# banner starts free practice (no coins, no daily best). A rewarded ad adds one more.
+static func _att(k: String, default = 0):
+	if int(Wallet.get_v("daily", "att_day", -999999)) != today():
+		return default
+	return Wallet.get_v("daily", k, default)
+
+static func _set_att(k: String, v) -> void:
+	if int(Wallet.get_v("daily", "att_day", -999999)) != today():
+		Wallet.set_v("daily", "att_day", today())
+		Wallet.set_v("daily", "used", 0)
+		Wallet.set_v("daily", "extra", 0)
+		Wallet.set_v("daily", "best", -1.0)
+	Wallet.set_v("daily", k, v)
+
+static func attempts_total() -> int:
+	return int(load("res://scripts/monetization.gd").DAILY_ATTEMPTS) + int(_att("extra"))
+
+static func attempts_left() -> int:
+	return maxi(0, attempts_total() - int(_att("used")))
+
+static func use_attempt() -> void:
+	if attempts_left() > 0:
+		_set_att("used", int(_att("used")) + 1)
+
+static func give_back_attempt() -> void:
+	_set_att("used", maxi(0, int(_att("used")) - 1))
+
+static func add_extra() -> void:
+	_set_att("extra", int(_att("extra")) + 1)
+
+# today's best scored time (lap, or run score on Collect); -1: none yet
+static func best_today() -> float:
+	return float(_att("best", -1.0))
+
+static func note_time(t: float) -> void:
+	if t > 0.0 and (best_today() < 0.0 or t < best_today()):
+		_set_att("best", t)

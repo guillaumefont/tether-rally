@@ -65,6 +65,10 @@ var offers_used := {}        # offers already taken on this results screen
 var offer_busy := ""         # the offer whose video is playing
 var results_n := 0           # counts results screens, so a late reward never touches a newer one
 var gold_offer := false      # these results may offer the Gold ghost (a Time trial run without Gold)
+# Daily Detour (docs/monetization.md): only a run started from its banner counts
+var daily_run := false       # this event is the Daily Detour
+var daily_scored := false    # ...and this run uses a scored attempt (else it is practice)
+var attempt_live := false    # an attempt was used at GO and the run hasn't finished yet
 var tutorial := false        # the run is the tutorial (Defs.TUTORIAL), driven by `tut`
 var tut: Tutorial = null
 # behind the menu: AI drivers race a snowy track, changing track every ATTRACT_SECS
@@ -225,6 +229,7 @@ func _to_awards() -> void:
 	ui.menu.show_awards()
 
 func _to_menu() -> void:
+	_drop_attempt()
 	if tutorial:
 		Settings.set_opt("tutorial_done", true)
 	tutorial = false
@@ -369,6 +374,7 @@ func _start_event(ev: Dictionary) -> void:
 	humans = ev["humans"]
 	var camp: bool = ev.get("kind", "") == "campaign"
 	free_run = ev.get("kind", "") == "custom"
+	daily_run = ev.get("kind", "") == "daily"
 	free_laps = int(ev.get("laps", 0)) if free_run else 0
 	rival_tier = Rivals.campaign_tier(Campaign.chapter_of(ev["idx"])) if camp else Rivals.VERSUS_TIER
 	if free_run:
@@ -378,6 +384,7 @@ func _start_event(ev: Dictionary) -> void:
 	_load_race()
 
 func new_race(built: TrackData = null) -> void:
+	_drop_attempt()
 	paused = false
 	ui.hide_pause()
 	attract = null
@@ -395,6 +402,7 @@ func new_race(built: TrackData = null) -> void:
 	themes_before = Themes.ORDER.filter(func(t): return Campaign.theme_unlocked(t))
 	worlds_before = range(Campaign.CHAPTERS.size()).filter(func(c): return Campaign.chapter_done(c))
 	ghost = Records.get_ghost(rec_key()) if mode == "trial" and not tutorial else []
+	daily_scored = daily_run and not tutorial and Daily.attempts_left() > 0
 	var nm: String = cur_def()["name"]
 	gold_ghost = GoldGhosts.trace(nm, variant) if mode == "trial" and not tutorial and humans == 1 and GoldGhosts.unlocked(nm, variant) else []
 	view.setup_cars(race, mode == "trial" and not tutorial, _dress(race), not gold_ghost.is_empty())
@@ -517,6 +525,7 @@ func _process(delta: float) -> void:
 			ui.set_big(str(n) if n > 0 else "GO")
 			if countdown <= 0.2:
 				phase = "race"
+				_go()
 		"race", "done":
 			var gdt := dt
 			if tut:
@@ -853,10 +862,19 @@ func _show_results() -> void:
 		var coins := Wallet.medal_coins(start_tier, run_tier)
 		gold_offer = GoldGhosts.offer(name, variant, c.finished, run_tier, maxi(start_tier, tier))
 		var daily := 0
-		if c.finished and Daily.is_today(track_idx, variant):
+		attempt_live = false
+		if c.finished and daily_scored:
 			daily = Daily.claim(run_tier)
+			Daily.note_time(run_val)
+		if daily_run and not daily_scored:
+			coins = 0   # Daily Detour practice pays nothing
 		note = _pay(coins, daily, { "mode": "trial", "variant": variant, "finished": c.finished, "clean_laps": c.best_clean_laps,
 			"streak": c.best_streak, "hits": c.hits, "gems_all": track.tokens.size() > 0 and c.gems == track.tokens.size() }, rewards) + note
+		if daily_run and not daily_scored:
+			note = "Daily Detour practice: no coins or daily best. Records and medals still count. " + note
+		elif daily_scored:
+			var left := Daily.attempts_left()
+			note += " Daily Detour: %s." % ("%d scored attempt%s left" % [left, "" if left == 1 else "s"] if left > 0 else "no scored attempt left today, practice is free")
 		ui.show_results("New record" if new_record else "Time trial", rows, _unlock_note() + note, not ui.menu.next_event().is_empty(), 3, rewards)
 		_refresh_offers()
 		_world_moment()
@@ -961,13 +979,29 @@ func _pay(medal_coins: int, daily: int, run: Dictionary, rewards: Array) -> Stri
 		txt += "New award%s: collect %d coins in the Passport.  " % ["s" if won.size() > 1 else "", won.reduce(func(n, a): return n + int(a["coins"]), 0)]
 	return txt
 
+# ---------------------------------------------------------------- Daily Detour attempts
+# GO: a scored Daily Detour run uses its attempt now
+func _go() -> void:
+	if daily_scored and not attempt_live:
+		Daily.use_attempt()
+		attempt_live = true
+
+# leaving or restarting a run: a scored attempt quit during its first lap is given back
+func _drop_attempt() -> void:
+	if not attempt_live:
+		return
+	attempt_live = false
+	if race != null and not race.cars[0].finished and race.cars[0].lap <= 1:
+		Daily.give_back_attempt()
+
 # ---------------------------------------------------------------- rewarded-ad offers
 const OFFER_TEXT := { "double_coins": "x2 coins", "gold_ghost": "Gold ghost", "daily_extra": "+1 scored attempt" }
 const OFFER_ICON := { "double_coins": "coin", "gold_ghost": "ghost", "daily_extra": "retry" }
 
 # what the offers rule (Monetization.results_offers) needs to know about this results screen
 func _offer_ctx() -> Dictionary:
-	return { "total": pay_total, "free": free_run, "tutorial": tutorial, "humans": humans, "used": offers_used, "gold_ghost": gold_offer }
+	return { "total": pay_total, "free": free_run, "tutorial": tutorial, "humans": humans, "used": offers_used, "gold_ghost": gold_offer,
+		"daily_extra": daily_run and Daily.attempts_left() <= 0 }
 
 func _refresh_offers() -> void:
 	if phase != "results" or tutorial:
@@ -1000,6 +1034,10 @@ func _offer_granted(id: String, total: int, screen: int) -> void:
 			if here:
 				ui.set_reward_text(0, "+%d x2 COINS" % total)
 				sfx.blip(1320, 0.2, "square", 0.05, 300)
+		"daily_extra":
+			Daily.add_extra()
+			if here:
+				ui.res_note.text = "One more scored attempt today: tap Again."
 		"gold_ghost":
 			GoldGhosts.unlock(cur_def()["name"], variant)
 			if here:

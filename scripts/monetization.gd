@@ -47,7 +47,8 @@ static func left_today(key: String) -> int:
 # ---------------------------------------------------------------- results offers
 # the rewarded-ad buttons a results screen shows, in order. ctx: total (coins the run paid),
 # free (Off the Map), tutorial, humans, used (offers already taken on this screen), gold_ghost
-# (GoldGhosts.offer() said yes: a Time trial run without Gold, ghost not open yet).
+# (GoldGhosts.offer() said yes: a Time trial run without Gold, ghost not open yet), daily_extra
+# (a Daily Detour run with no scored attempt left).
 static func results_offers(ctx: Dictionary) -> Array:
 	var out: Array = []
 	if ctx.get("free", false) or ctx.get("tutorial", false) or int(ctx.get("humans", 1)) != 1:
@@ -57,6 +58,8 @@ static func results_offers(ctx: Dictionary) -> Array:
 		out.append("double_coins")
 	if ctx.get("gold_ghost", false) and not used.has("gold_ghost"):
 		out.append("gold_ghost")
+	if ctx.get("daily_extra", false) and not used.has("daily_extra") and left_today("daily_extra") > 0:
+		out.append("daily_extra")
 	return out
 
 # ---------------------------------------------------------------- full-screen ad pacing
