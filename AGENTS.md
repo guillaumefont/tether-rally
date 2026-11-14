@@ -17,6 +17,16 @@
 - The repo is `guillaumefont/tether-rally` (renamed from `tether` on 2026-11-13). The Pages site path
   follows the repo name; `build.yml` and `.github/pages/404.html` derive it, so only the docs spell it out.
 - All APKs share one app id: installing a PR build replaces the installed `main` build.
+- Test APKs update themselves (Guillaume, 2026-11-14; `scripts/self_update.gd`, an autoload so it
+  runs before `main.tscn` loads). Each build also publishes `game.pck` (the game data alone) and
+  `update.json` beside its APK; an installed APK reads `update.json` from its own folder (main, or
+  `pr/N/` for a PR's APK), downloads newer game data in the background and mounts it at the next
+  launch (home page slip: "restart"). Data alone can't change the engine, `project.godot`, the export
+  presets or `self_update.gd` (the `SHELL` fingerprint CI writes into `scripts/build_info.gd`): a
+  change to any of those makes installed apps offer the new APK instead (one tap to install, Android
+  always asks). Only CI test APKs carry the `self_update` feature; a store build must never have it
+  (Play forbids self-updating code). Something that must run before the game data is mounted
+  belongs in `self_update.gd`, and nothing else may load before it.
 
 ## Keeping this file up to date
 
@@ -68,6 +78,7 @@ godot --headless --path . --script tests/camera_test.gd    # low camera shots: o
 godot --headless --path . --script tests/engine_test.gd    # every vehicle has an engine sound that loops cleanly
 godot --headless --path . --script tests/underpass_test.gd # all deck over a lower lane is a see-through window
 godot --headless --path . --script tests/road_trip_colour_test.gd # Road Trip pages in their world's colour, stop names fit
+godot --headless --path . --script tests/self_update_test.gd  # test APKs update themselves safely
 ```
 
 After changing a track layout, rerun `tools/gen_obstacles.gd` (posts placed off the AI's racing line,

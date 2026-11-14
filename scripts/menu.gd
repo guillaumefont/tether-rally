@@ -542,6 +542,54 @@ func show_home() -> void:
 	place_daily.call()
 	daily.rotation = deg_to_rad(3.5 if not tall else 2.5)
 	daily.resized.connect(func(): daily.pivot_offset = daily.size * 0.5)
+	_update_slip()
+
+# Test builds update themselves (scripts/self_update.gd): when a newer build is downloaded
+# (or needs the new app), a slip of paper taped on the desk in the top right corner says so;
+# tap it to restart into it (or to fetch the new APK). It appears as soon as the download
+# finishes, without rebuilding the page.
+func _update_slip() -> void:
+	var su := get_node_or_null("/root/SelfUpdate")
+	if su == null or screen != "home" or body == null:
+		return
+	if not su.changed.is_connected(_update_slip):
+		su.changed.connect(_update_slip)
+	for c in body.get_children():
+		if c.has_meta("update_slip"):
+			c.queue_free()
+	var text: String = su.offer()
+	if text == "":
+		return
+	var tall: bool = ui.is_portrait()
+	var ins: Dictionary = ui.safe_insets()
+	var b := Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.tooltip_text = "A newer test build of the game is ready"
+	b.set_meta("update_slip", true)
+	for st in ["normal", "hover", "pressed", "hover_pressed"]:
+		var sb := Paper.box(Paper.CARD.darkened(0.06) if st != "normal" else Paper.CARD, Paper.INK_FAINT, 1, 1 if st.contains("pressed") else 3)
+		sb.content_margin_left = 14; sb.content_margin_right = 14
+		b.add_theme_stylebox_override(st, sb)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var l := Paper.note(text, 20 if tall or _short() else 22, Paper.RED_INK, 0.0)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var sz := Vector2(l.get_minimum_size().x + 28, maxf(l.get_minimum_size().y + 4, 40.0))
+	b.custom_minimum_size = sz
+	b.add_child(l)
+	b.draw.connect(func(): Paper.draw_tape(b, Vector2(b.size.x * 0.5, 1.0), 34.0, 11.0, -0.06))
+	# top right, on the desk: above the Track of the day photo (landscape), above the page (portrait)
+	b.anchor_left = 1.0; b.anchor_right = 1.0
+	b.offset_right = -(18.0 if tall else 56.0) - float(ins["r"])
+	b.offset_left = b.offset_right - sz.x
+	b.offset_top = (12.0 if tall else 34.0) + float(ins["t"])
+	b.offset_bottom = b.offset_top + sz.y
+	b.rotation = deg_to_rad(2.0)
+	b.pivot_offset = sz * 0.5
+	b.pressed.connect(func(): su.act())
+	body.add_child(b)
 
 # the discreet way into Off the Map: a scrap of paper taped down with "off the map ›"
 # pencilled on it, at the foot of the page (portrait) or on the desk under the Track of the

@@ -91,6 +91,29 @@ jobs:
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=androiddebugkey" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=android" >> "$GITHUB_ENV"
 
+      # Test builds update themselves (scripts/self_update.gd): stamp the build's number, the
+      # Pages folder it checks for updates, and the fingerprint of what a game-data update can't
+      # change (engine, project.godot, export presets, the updater itself; taken before the
+      # Android step edits the presets). A newer build with another fingerprint needs its APK.
+      - name: Build info (self-update)
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          fp=$( { echo "$GODOT_VERSION"; cat project.godot export_presets.cfg scripts/self_update.gd; } | sha256sum | cut -c1-16)
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          channel="https://$owner.github.io/${GITHUB_REPOSITORY#*/}/${PR:+pr/$PR/}"
+          {
+            echo "# Written by CI (.github/workflows/build.yml): see the committed file for what each value means."
+            echo "extends RefCounted"
+            echo ""
+            echo "const BUILD := $GITHUB_RUN_NUMBER"
+            echo "const SHELL := \"$fp\""
+            echo "const ENGINE := \"$GODOT_VERSION\""
+            echo "const CHANNEL := \"$channel\""
+          } > scripts/build_info.gd
+          cat scripts/build_info.gd
+          echo "SHELL_FP=$fp" >> "$GITHUB_ENV"
+
       - name: Import project
         run: $RUNNER_TEMP/godot --headless --path . --import
 
@@ -116,10 +139,23 @@ jobs:
           sed -i "0,/^version\/code=.*/s//version\/code=$code/; 0,/^version\/name=.*/s//version\/name=\"$name\"/" export_presets.cfg
           grep -m2 '^version/' export_presets.cfg
           mkdir -p "$OUT/android"
-          sed -i '/^\[preset.0\]/,/^\[preset.0.options\]/ s/^custom_features=""/custom_features="preview"/' export_presets.cfg
-          grep -q 'custom_features="preview"' export_presets.cfg
+          sed -i '/^\[preset.0\]/,/^\[preset.0.options\]/ s/^custom_features=""/custom_features="preview,self_update"/' export_presets.cfg
+          grep -q 'custom_features="preview,self_update"' export_presets.cfg
           $RUNNER_TEMP/godot --headless --path . --export-release Android "$OUT/android/tether-racing.apk"
           test -s "$OUT/android/tether-racing.apk"
+
+      # The game data alone (same preset and features), and update.json describing it: an
+      # installed test APK downloads these to update itself without a new install.
+      # Test builds only: a store build must never carry the self_update feature.
+      - name: Export game data for self-update
+        run: |
+          $RUNNER_TEMP/godot --headless --path . --export-pack Android "$OUT/android/game.pck"
+          test -s "$OUT/android/game.pck"
+          size=$(stat -c%s "$OUT/android/game.pck")
+          sha=$(sha256sum "$OUT/android/game.pck" | cut -d' ' -f1)
+          printf '{"build": %d, "engine": "%s", "shell": "%s", "pck": "game.pck", "size": %d, "sha256": "%s", "apk": "tether-racing.apk"}\n' \
+            "$GITHUB_RUN_NUMBER" "$GODOT_VERSION" "$SHELL_FP" "$size" "$sha" > "$OUT/android/update.json"
+          cat "$OUT/android/update.json"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -133,7 +169,7 @@ jobs:
         run: |
           mkdir -p "$OUT/stage"
           cp -r "$OUT/web/." "$OUT/stage/"
-          cp "$OUT/android/tether-racing.apk" "$OUT/stage/"
+          cp "$OUT/android/tether-racing.apk" "$OUT/android/game.pck" "$OUT/android/update.json" "$OUT/stage/"
           # site root only: dead PR preview links land on 404.html, which opens the main build
           if [ "$DEST" = "." ]; then cp .github/pages/404.html "$OUT/stage/"; fi
           bash .github/publish-pages.sh "$OUT/stage" "$DEST" "Build of ${GITHUB_SHA::7} for $DEST"

@@ -221,6 +221,11 @@ func _to_menu() -> void:
 	sfx.music.play("menu")
 	ui.show_menu()
 	_start_attract()
+	# test builds: the running build reached the menu (so it works), and look for a newer one
+	var su := get_node_or_null("/root/SelfUpdate")
+	if su:
+		su.confirm()
+		su.poke()
 
 # Player 1's car wears the Garage look (paint is also their colour on the HUD and the
 # results). A rival whose colour is too close to it swaps to a spare one so cars stay

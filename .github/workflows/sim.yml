@@ -70,3 +70,5 @@ jobs:
         run: ./godot --headless --path . --script tests/underpass_test.gd
       - name: Road Trip pages wear their world colour
         run: ./godot --headless --path . --script tests/road_trip_colour_test.gd
+      - name: Test builds update themselves (game data, APK offer, safe launch)
+        run: ./godot --headless --path . --script tests/self_update_test.gd
