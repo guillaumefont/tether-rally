@@ -52,6 +52,8 @@ jobs:
         run: ./godot --headless --path . --script tests/custom_game_test.gd
       - name: No blue accent in the UI or icon (Ice Blue case)
         run: ./godot --headless --path . --script tests/colours_test.gd
+      - name: Medal logo feeds the icons, web page and game
+        run: ./godot --headless --path . --script tests/logo_test.gd
       - name: Traveller names, no old arcade names
         run: ./godot --headless --path . --script tests/names_test.gd
       - name: Award medallions all draw

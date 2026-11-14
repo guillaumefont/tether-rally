@@ -59,6 +59,7 @@ godot --headless --path . --script tests/attack_unlock_test.gd # Time attack tra
 godot --headless --path . --script tests/time_attack_test.gd  # Time attack: Standard only, world chip
 godot --headless --path . --script tests/custom_game_test.gd # Off the Map: hidden link, all picks open, saves nothing
 godot --headless --path . --script tests/colours_test.gd    # no blue accent in UI, icons, splash, web page
+godot --headless --path . --script tests/logo_test.gd       # medal logo: icons up to date, web page and game draw it
 godot --headless --path . --script tests/award_anim_test.gd # every award has a medallion scene that draws
 godot --headless --path . --script tests/names_test.gd       # Tether Rally + traveller mode names, no old names in UI text
 godot --headless --path . --script tests/rivals_test.gd    # rival tiers get harder, stay beatable (~4 min)
@@ -113,9 +114,17 @@ Only redo the ones where the change is visible, and put before/after images in t
   (bolder, boxed, filled or under the grey marker `Paper.HL`); on dark (HUD, splash, loading ring,
   logo, icon hub) it is chalk cream `#f3efe6` (`C_ACCENT` in `menu_art.gd`, mirrored in `ui.gd`).
   Amber `#f2b134` is the player's car and rope; gold is only for medals and coins (`C_COIN`). Don't
-  bring back a blue (or any new) accent colour; `tests/colours_test.gd` checks it. Icons/splash PNGs
-  and the logo PNG inside `web/shell.html` must follow `icon.svg` and `menu_art.gd` when these change
-  (`tools/gen_splash.gd`, `tools/gen_web_shell.gd`; the icon PNGs are PIL edits of `icon.svg`'s look).
+  bring back a blue (or any new) accent colour; `tests/colours_test.gd` checks it (it also counts
+  saturated blue pixels in the icons, so keep the icon's dusk sky violet or dark, not mid blue).
+- Logo (Guillaume, 2026-11-14): "the medal", a round chalk-cream medal, dark inside, the amber car
+  swinging round the tower seen from above with three speed trails; on the app icon it stands in
+  front of a snowy dusk scene. One source, `scripts/logo_art.gd` (SVG strings, -50..50 box): the
+  game draws its frame as a texture and the moving parts in code (`draw_medal`, used by the menu
+  header `Logo` and the loading emblem/ring), and the web page `web/shell_template.html` repeats
+  the same SVG. After changing it, run `tools/gen_icons.gd` (icon.svg, `icons/`, `store/icon-512.png`),
+  `tools/gen_splash.gd` and `tools/gen_web_shell.gd`; `tests/logo_test.gd` fails if icon.svg is stale.
+  An inner class of a script cannot call the outer script's static functions: shared drawing goes
+  in its own script (`Logo_.draw_medal`), not in `menu_art.gd`'s top level.
 - Launch (Guillaume, 2026-11-14): no static splash. The engine's boot splash shows no picture
   (`boot_splash/show_image=false`), only the night colour `#06121b`, and `main.gd` draws the loading
   screen before any slow setup (`booting()`); put new startup work after those frames, never before
