@@ -3,6 +3,8 @@
 #   time; offered after a run without Gold, unlocked for good by the video, not after a Gold run
 # - Daily Detour: an attempt is used at GO, given back by a first-lap quit, only from the banner;
 #   with none left the banner starts practice (no coins); a video adds one
+# - full-screen ads when leaving the results: none in the first session, before 6 races, after
+#   the tutorial, Off the Map or with No ads; then one every 4 races, a test card meanwhile
 # - "x2 coins": the wallet gets the run's coins a second time, once per results screen; the
 #   badge says so; the daily cap holds; never after Off the Map, the tutorial or a 2-player race
 #   godot --headless --path . --script tests/results_offers_test.gd
@@ -239,6 +241,71 @@ func _run() -> void:
 	check(Daily.attempts_left() == 1, "+1 scored attempt after the video")
 	Daily.fake_day = dday + 1
 	check(Daily.attempts_left() == 3, "three again the next day")
+
+	# ---- full-screen ads: none in the first session or before 6 races, then one every 4
+	Daily.fake_day = Daily.day_of(2030, 1, 1)
+	Store._cfg = ConfigFile.new()
+	Wallet.reset()
+	Monetization.fake_now = 5_000_000
+	Ads._last_ad_ms = -1
+	var Settings = load("res://scripts/settings.gd")
+	var launches_was: int = Monetization.launches()
+	Settings.set_opt("launches", 1)
+	var ads_seen := [0]
+	var leave := func():
+		var went := [false]
+		main._leave_results(func(): went[0] = true)
+		var shown: bool = main._ad_showing
+		if shown:
+			ads_seen[0] += 1
+			check(main.ui.ad_card.visible, "the test ad card covers the screen")
+			await create_timer(Ads.stub_delay + 0.3).timeout
+			check(not main.ui.ad_card.visible, "the card goes after the ad")
+		check(went[0], "the player goes on after leaving the results")
+	Ads.stub_delay = 0.2
+	for k in 8:
+		await start(ev)
+		await finish_trial(gold + 3.0)
+		Monetization.fake_now += 600
+		await leave.call()
+	check(ads_seen[0] == 0, "no full-screen ad in the first session (%d)" % ads_seen[0])
+	Settings.set_opt("launches", 2)
+	Wallet.set_v("ads", "races", 0)
+	Wallet.set_v("ads", "since_ad", 0)
+	for k in 5:
+		await start(ev)
+		await finish_trial(gold + 3.0)
+		Monetization.fake_now += 600
+		await leave.call()
+	check(ads_seen[0] == 0, "none before 6 races")
+	for k in 9:
+		await start(ev)
+		await finish_trial(gold + 3.0)
+		Monetization.fake_now += 600
+		Ads._last_ad_ms = -1
+		await leave.call()
+	check(ads_seen[0] == 3, "then one every 4 races (%d after 14)" % ads_seen[0])
+	# the tutorial's end screen never leads to one
+	Wallet.set_v("ads", "since_ad", 10)
+	Monetization.fake_now += 600
+	main.tutorial = true
+	await leave.call()
+	main.tutorial = false
+	check(ads_seen[0] == 3, "never after the tutorial")
+	# nor Off the Map
+	await start({ "track": 0, "variant": "standard", "mode": "trial", "humans": 1, "kind": "custom", "idx": 0, "theme": "", "laps": 1 })
+	await finish_trial(gold + 3.0)
+	await leave.call()
+	check(ads_seen[0] == 3, "never after Off the Map")
+	# No ads: none
+	Store.buy("remove_ads")
+	await start(ev)
+	await finish_trial(gold + 3.0)
+	await leave.call()
+	check(ads_seen[0] == 3, "never with No ads")
+	Settings.set_opt("launches", launches_was)
+	Monetization.fake_now = -1
+	Ads.stub_delay = 0.0
 
 	# put things back
 	Daily.fake_day = -1

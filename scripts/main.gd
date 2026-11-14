@@ -96,16 +96,22 @@ func _ready() -> void:
 	ui.pause_action.connect(_pause_action)
 	ui.menu.start_event.connect(_start_event)
 	ui.menu.vehicle_picked.connect(func(id): sfx.rev(id))
-	ui.again_pressed.connect(new_race)
-	ui.next_pressed.connect(func():
+	# leaving the results is where a full-screen ad may show (rarely: Monetization's pacing)
+	ui.again_pressed.connect(func(): _leave_results(func(): new_race()))
+	ui.next_pressed.connect(func(): _leave_results(func():
 		var nx: Dictionary = ui.menu.next_event()
 		if not nx.is_empty():
 			ui.menu.ev = nx
-			_start_event(nx))
-	ui.menu_pressed.connect(func(): _with_loading("", _to_menu))
+			_start_event(nx)))
+	ui.menu_pressed.connect(func(): _leave_results(func(): _with_loading("", _to_menu)))
+	ui.restore_pressed.connect(func(): Store.restore(func(r):
+		var sh := _shop()
+		sh["note"] = "PURCHASES RESTORED" if r == "ok" else "STORE NOT AVAILABLE"
+		ui.set_shop(sh)))
+	ui.privacy_pressed.connect(func(): Ads.show_privacy_form())
 	ui.awards_pressed.connect(func(): _with_loading("", _to_awards))
 	ui.offer_pressed.connect(_offer_pressed)
-	ui.no_ads_pressed.connect(func(): Store.buy("remove_ads", func(_r): _refresh_offers()))
+	ui.no_ads_pressed.connect(func(): Store.buy("remove_ads", func(_r): _refresh_offers(); ui.set_shop(_shop())))
 	ui.skip_pressed.connect(_leave_tutorial)
 	ui.tutorial_pressed.connect(start_tutorial)
 	# There is no boot splash image (project.godot: boot_splash/show_image=false): the game
@@ -113,6 +119,7 @@ func _ready() -> void:
 	# slow setup (sound synthesis, the menu's track) behind it; a test that instantiates
 	# main itself gets everything set up before _ready returns.
 	ui.show_loading("")
+	Monetization.note_launch()   # the first session never sees a full-screen ad
 	if booting():
 		if OS.has_feature("web"):
 			ui.set_loading_progress(WEB_HANDOFF, true)   # the page's ring stopped there
@@ -322,7 +329,13 @@ func _options(with_ghost: bool) -> Dictionary:
 		"ghost": Settings.get_opt("ghost") if with_ghost else null,
 		"haptics": Settings.get_opt("haptics") if Haptics.available() else null,
 		"quality": Settings.get_opt("quality"),
+		"shop": _shop(),
 	}
+
+# the purchase lines of Settings
+func _shop() -> Dictionary:
+	return { "no_ads": Store.price("remove_ads") if Store.available() and not Ads.ads_removed() else "",
+		"restore": Store.available(), "privacy": Ads.privacy_required() }
 
 # a slider moved or a toggle flipped, from the pause menu or the settings screen
 func _option_changed(key: String, value) -> void:
@@ -877,6 +890,8 @@ func _show_results() -> void:
 			note += " Daily Detour: %s." % ("%d scored attempt%s left" % [left, "" if left == 1 else "s"] if left > 0 else "no scored attempt left today, practice is free")
 		ui.show_results("New record" if new_record else "Time trial", rows, _unlock_note() + note, not ui.menu.next_event().is_empty(), 3, rewards)
 		_refresh_offers()
+		if _counts_for_ads():
+			Monetization.note_race()
 		_world_moment()
 		_award_moment()
 		return
@@ -901,6 +916,8 @@ func _show_results() -> void:
 			"lead": lead, "clean_laps": me.best_clean_laps, "streak": me.best_streak, "hits": me.hits }, rrewards) + rnote
 	ui.show_results(title, rows2, _unlock_note() + rnote, not ui.menu.next_event().is_empty(), 3, rrewards)
 	_refresh_offers()
+	if _counts_for_ads():
+		Monetization.note_race()
 	_world_moment()
 	_award_moment()
 
@@ -978,6 +995,29 @@ func _pay(medal_coins: int, daily: int, run: Dictionary, rewards: Array) -> Stri
 	if not won.is_empty():
 		txt += "New award%s: collect %d coins in the Passport.  " % ["s" if won.size() > 1 else "", won.reduce(func(n, a): return n + int(a["coins"]), 0)]
 	return txt
+
+# ---------------------------------------------------------------- full-screen ads
+# a finished run that counts toward the full-screen ad pacing: not the tutorial (it has its
+# own end screen), Off the Map, Daily Detour practice or a 2-player race
+func _counts_for_ads() -> bool:
+	return not tutorial and not free_run and humans == 1 and not (daily_run and not daily_scored)
+
+var _ad_showing := false
+
+# Again / Next / Menu on the results: maybe a full-screen ad first, then `go_on`
+func _leave_results(go_on: Callable) -> void:
+	if _ad_showing:
+		return
+	var showing := Ads.maybe_interstitial("after_results" if _counts_for_ads() and phase == "results" else "none", func():
+		if _ad_showing:
+			_ad_showing = false
+			ui.show_ad_card(false)
+			AudioServer.set_bus_mute(0, false)
+		go_on.call())
+	if showing and Ads.busy():
+		_ad_showing = true
+		ui.show_ad_card(true)
+		AudioServer.set_bus_mute(0, true)   # the music steps aside for the ad
 
 # ---------------------------------------------------------------- Daily Detour attempts
 # GO: a scored Daily Detour run uses its attempt now

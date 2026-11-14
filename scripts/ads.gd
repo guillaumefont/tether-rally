@@ -63,18 +63,40 @@ static func _earned(placement: String, on_reward: Callable, watched: bool) -> vo
 	if on_reward.is_valid():
 		on_reward.call()
 
+# an ad is on screen (a video or a full-screen ad)
+static func busy() -> bool:
+	return _busy
+
 static func since_last_ad() -> float:
 	return -1.0 if _last_ad_ms < 0 else (Time.get_ticks_msec() - _last_ad_ms) / 1000.0
 
 # leaving a results screen: show a full-screen ad if one is due. `done` is called when the
 # player is free to go on (at once when no ad shows). Returns whether an ad showed.
-# The stub only counts it for now; the results screen wiring and a test card come later.
+# The stub "plays" it for stub_delay seconds (main shows a test card meanwhile).
 static func maybe_interstitial(trigger: String, done := Callable()) -> bool:
 	var show := trigger == "after_results" and not ads_removed() and _stub() and not _busy \
 		and Monetization.interstitial_due(since_last_ad())
-	if show:
-		Monetization.interstitial_shown()
+	if not show:
+		if done.is_valid():
+			done.call()
+		return false
+	Monetization.interstitial_shown()
+	_busy = true
+	var finish := func():
+		_busy = false
 		_last_ad_ms = Time.get_ticks_msec()
-	if done.is_valid():
-		done.call()
-	return show
+		if done.is_valid():
+			done.call()
+	if stub_delay <= 0.0:
+		finish.call()
+	else:
+		(Engine.get_main_loop() as SceneTree).create_timer(stub_delay, true).timeout.connect(finish)
+	return true
+
+# does this player need the ad consent form's "Privacy choices" entry (UMP, Europe)?
+# Only a real ad backend knows; the stub has no consent form.
+static func privacy_required() -> bool:
+	return false
+
+static func show_privacy_form() -> void:
+	pass
