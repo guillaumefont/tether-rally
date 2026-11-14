@@ -1003,15 +1003,15 @@ static func medal_stamp(st: Paper.Stamp, medal: int) -> void:
 	st.col = Paper.ink_of(c).darkened(0.25)
 	st.fill = Color(c.lightened(0.15), 0.85)
 
-# the stop shown open in the Road Trip list (its targets and Start under it); -1 = pick one
+# the stop the Road Trip list scrolls to: the one raced last, else the next to play
 var _stop := -1
 
 func _campaign_ev(i: int) -> Dictionary:
 	var e := Campaign.event(i)
 	return { "track": e["track"], "variant": e["variant"], "mode": e["mode"], "humans": 1, "kind": "campaign", "idx": i, "theme": e.get("theme", "") }
 
-# the stop to show open in this world: the one picked or raced last (`ev`), else the next
-# one to play, else the world's first
+# the stop to bring into view in this world: the one raced last (`ev`), else the next one
+# to play, else the world's first
 func _pick_stop() -> int:
 	var i0 := Campaign.chapter_start(world)
 	var mine := func(i: int) -> bool: return i >= i0 and i < i0 + Campaign.chapter_size(world) and Campaign.unlocked(i)
@@ -1021,15 +1021,14 @@ func _pick_stop() -> int:
 	return first if mine.call(first) else i0
 
 # A world's stops (Guillaume, 2026-11-14): the world select is the only way to change world
-# (no world tabs here), and there is no separate page per stop: the stop picked in the list
-# opens in place with its medal targets and Start.
+# (no world tabs here), and a tap on a stop starts its race straight away: no page or panel
+# per stop, no target times (the medal stamped on each line is enough).
 func _show_campaign() -> void:
 	if world < 0 or not Campaign.chapter_open(world):
 		_show_worlds()
 		return
 	screen = "list"
 	_stop = _pick_stop()
-	ev = _campaign_ev(_stop)
 	var vb := _frame()
 	var tall: bool = ui.is_portrait()
 	var cleared := 0
@@ -1079,14 +1078,9 @@ func _show_campaign() -> void:
 		for i in Campaign.count():
 			_seen_medal[i] = Campaign.event_medal(i)
 	for k in Campaign.chapter_size(world):
-		var cell := VBoxContainer.new()
-		cell.add_theme_constant_override("separation", 0)
-		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		cell.add_child(_event_line(i0 + k, tall))
-		if i0 + k == _stop:
-			cell.add_child(_stop_details(tall))
-		g.add_child(cell)
-		lines.append(cell)
+		var line := _event_line(i0 + k, tall)
+		g.add_child(line)
+		lines.append(line)
 		_seen_medal[i0 + k] = Campaign.event_medal(i0 + k)
 	var list := VBoxContainer.new()
 	list.add_child(g)
@@ -1110,52 +1104,6 @@ func _show_campaign() -> void:
 	if show >= 0 and show < lines.size():
 		_reveal.call_deferred(_scroller, lines[show])
 	focus = -1
-
-# under the open stop: its note, medal targets, what Gold does, and Start
-func _stop_details(tall: bool) -> Control:
-	var d: Dictionary = Defs.TRACKS[ev["track"]]
-	var m := MarginContainer.new()
-	m.add_theme_constant_override("margin_left", 48)
-	m.add_theme_constant_override("margin_right", 6)
-	m.add_theme_constant_override("margin_top", 6)
-	m.add_theme_constant_override("margin_bottom", 10)
-	m.set_meta("stop_details", ev["idx"])
-	var box: BoxContainer = VBoxContainer.new() if tall else HBoxContainer.new()
-	box.add_theme_constant_override("separation", 8 if tall else 16)
-	m.add_child(box)
-	var info := VBoxContainer.new()
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.add_theme_constant_override("separation", 4)
-	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(info)
-	var note := String(d["note"])
-	if ev["variant"] != "standard":   # a layout with a rule of its own says it
-		for v in Defs.VARIANTS:
-			if v[0] == ev["variant"]: note = v[2]
-	var nl: Label = ui._label(note, 13, C_MUTED, ui.f_bold)
-	info.add_child(nl)
-	var t := _targets()
-	var ms := MedalStrip.new()
-	ms.ink = true
-	ms.font = ui.f_bold
-	ms.font_size = 13
-	ms.custom_minimum_size = Vector2(0, 46)
-	ms.set_state(Campaign.medal(d["name"], ev["variant"], ev["mode"]), t["labels"])
-	ms.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	info.add_child(ms)
-	info.add_child(ui._label(t["line"], 13, C_ACCENT, ui.f_bold))
-	var go: Button = ui.icon_button("play", "START", "go", false, 52)
-	go.custom_minimum_size.x = 0 if tall else 170
-	go.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	go.set_meta("stop_start", ev["idx"])
-	go.pressed.connect(func(): start_event.emit(ev.duplicate()))
-	var gm := MarginContainer.new()   # room for its block shadow
-	gm.add_theme_constant_override("margin_right", 5)
-	gm.add_theme_constant_override("margin_bottom", 5)
-	gm.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	gm.add_child(go)
-	box.add_child(gm)
-	return m
 
 # the medal targets of `ev` and the line under them: { labels, line }
 func _targets() -> Dictionary:
@@ -1322,7 +1270,7 @@ var _seen_medal := {}   # event -> medal it had when its line was last shown
 func _event_line(i: int, tall: bool) -> Button:
 	var e := Campaign.event(i)
 	var locked := not Campaign.unlocked(i)
-	var cur := i == _stop   # the open stop: its number filled in, its name under the marker
+	var cur := i == _first_open_event()   # the next to play: number filled in, name under the marker
 	var medal := Campaign.event_medal(i)
 	var n := i - Campaign.chapter_start(Campaign.chapter_of(i))
 	var b := Button.new()
@@ -1380,11 +1328,8 @@ func _event_line(i: int, tall: bool) -> Button:
 	b.add_child(h)
 	b.set_meta("stop", i)
 	b.pressed.connect(func():
-		if i == _stop:
-			return
-		ev = _campaign_ev(i)   # open this stop in place (the list keeps its scroll)
-		focus = i - Campaign.chapter_start(world)
-		_show_campaign())
+		ev = _campaign_ev(i)   # one tap races it (the list comes back on it after the race)
+		start_event.emit(ev.duplicate()))
 	return b
 
 # scroll just enough to show `card` (once the list has been laid out)
