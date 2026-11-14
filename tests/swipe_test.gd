@@ -60,6 +60,10 @@ func _init() -> void:
 	rec.set_value("campaign", "attack_gate", true)
 	for d in preload("res://scripts/track_defs.gd").TRACKS:
 		rec.set_value("attack", d["name"], true)
+	# Gold on the first Road Trip stop (in memory), so a second stop is open to tap
+	var C0 = preload("res://scripts/campaign.gd")
+	var e0: Dictionary = C0.event(0)
+	preload("res://scripts/records.gd").award_medal(preload("res://scripts/records.gd").key(e0["name"], e0["variant"]), e0["mode"], C0.GOLD)
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	await frames(5)
