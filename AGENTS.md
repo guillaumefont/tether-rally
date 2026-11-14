@@ -69,6 +69,7 @@ godot --headless --path . --script tests/pause_test.gd   # pause page stays shor
 godot --headless --path . --script tests/wall_test.gd    # a car on the road edge always gets off it again
 godot --headless --path . --script tests/tutorial_test.gd  # the first-launch tutorial can be finished
 godot --headless --path . --script tests/cosmetics_test.gd  # garage items: prices, every look builds, looks only
+godot --headless --path . --script tests/car_ao_test.gd    # baked car AO fits every vehicle's current parts
 godot --headless --path . --script tests/economy_test.gd    # coins, Track of the day, awards, buying, progress reset
 godot --headless --path . --script tests/monetization_test.gd # ads/store stubs: rewards, daily caps, full-screen pacing, No ads
 godot --headless --path . --script tests/results_offers_test.gd # results ad offers, Gold ghost, Daily Detour attempts, full-screen ads
@@ -109,6 +110,12 @@ does. Test with a long save too (four-digit coins, every medal kind): the home p
 
 Screenshots without a GPU: `xvfb-run -a godot --rendering-driver opengl3 --path . --resolution 1280x720 -- <demo flag>`
 with `SHOT_DIR=<dir>`. Demo flags in `scripts/main.gd`: `--demo=`, `--tutorial-demo`, `--cine-demo=` (camera shots).
+
+Car ambient occlusion is baked, not rendered (the Mobile renderer has no SSAO): `tools/bake_car_ao.gd`
+ray traces each vehicle's game model once into `art/car_ao.res` (per-vertex shading, applied as vertex
+colours by `WorldView.apply_ao`). After changing any vehicle's parts, rerun
+`godot --headless --path . --script tools/bake_car_ao.gd` (~10 s) and commit the `.res`;
+`tests/car_ao_test.gd` fails until you do. Livery decals and detail-2 artwork models are left out.
 
 Engine sounds: each vehicle has a profile in `scripts/engines.gd` (a new vehicle needs one, the
 test checks). Hear them without a speaker-equipped game: `ENGINE_OUT=<dir> godot --headless --path .
