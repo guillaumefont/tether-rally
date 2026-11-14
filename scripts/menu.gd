@@ -971,10 +971,10 @@ func _track_order() -> Array:
 
 # The campaign is one roadbook: a tab per world down the side (across the top in portrait),
 # and the open world's 12 events as numbered lines, each with its track's outline and the
-# medal stamped on it. Each world is a coloured divider in the notebook (Guillaume,
-# 2026-11-14: the page looked sad next to the others): the open tab and the page of events
-# behind it share the world's colour, its picture is taped by the title, and medals are
-# stamped in their own metal. The colour comes from the world, never a UI accent.
+# medal stamped on it. Colour comes from the worlds (Guillaume, 2026-11-14: the page looked
+# sad): tabs in the world's tint, its picture taped by the title, its name under a marker in
+# its colour, medals stamped in their own metal. Never a UI accent, and never a full page
+# of world colour behind the events (tried and dropped the same day).
 const WORLD_TINT := { "snow": Color("#d8e8f2"), "forest": Color("#d3e6c8"), "sand": Color("#eedcb4"), "rock": Color("#d6d0c6") }
 # the world's own deep colour, dark enough to read on its tint (marker under its name)
 const WORLD_INK := { "snow": Color("#5b8fb3"), "forest": Color("#5d9447"), "sand": Color("#c98a3a"), "rock": Color("#8c7462") }
@@ -1003,7 +1003,6 @@ func _show_campaign() -> void:
 	_header(vb, "Road Trip", "%d / %d stops cleared with Gold  ·  Gold opens the next stop" % [cleared, Campaign.count()] if not tall else "%d / %d stops cleared" % [cleared, Campaign.count()], func(): go_back())
 	var ch: Dictionary = Campaign.CHAPTERS[world]
 	var theme: String = ch["theme"]
-	var tint: Color = WORLD_TINT.get(theme, Paper.PAPER_DARK)
 	var split: BoxContainer = VBoxContainer.new() if tall else HBoxContainer.new()
 	split.add_theme_constant_override("separation", 0)
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1019,13 +1018,15 @@ func _show_campaign() -> void:
 	split.add_child(tm)
 	for c in Campaign.CHAPTERS.size():
 		tabs.add_child(_world_tab(c, tall))
-	# the world's page: its colour, outlined in ink, joined to the open tab
+	# the world's events, straight on the page (Guillaume, 2026-11-14: no full world-colour
+	# background); in portrait the tabs stand on an ink line, the open one joined to it
 	var folder := PanelContainer.new()
-	var fs := Paper.box(tint, Paper.INK, 3, 0, 0)
-	fs.content_margin_left = 14 if not tall else 10
-	fs.content_margin_right = 10
+	var fs := StyleBoxFlat.new()
+	fs.bg_color = Color(0, 0, 0, 0)
+	fs.border_color = Paper.INK
+	fs.border_width_top = 3 if tall else 0
+	fs.content_margin_left = 14 if not tall else 0
 	fs.content_margin_top = 8
-	fs.content_margin_bottom = 4
 	folder.add_theme_stylebox_override("panel", fs)
 	folder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	folder.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1249,12 +1250,11 @@ func _world_tab(c: int, tall: bool) -> Button:
 		if on:
 			sb.border_color = Paper.INK
 			sb.set_border_width_all(3)
-			if tall:   # open at the bottom, running down over the page's top edge
+			if tall:   # open at the bottom, running down over the ink line under the tabs
 				sb.border_width_bottom = 0
 				sb.expand_margin_bottom = TAB_GAP + 3
-			else:      # open on the right, running over the page's left edge
-				sb.border_width_right = 0
-				sb.expand_margin_right = TAB_GAP + 3
+			else:      # outlined in ink and sticking out towards the events
+				sb.expand_margin_right = TAB_GAP
 		else:   # a shut tab: its colour a little faded, an ink hairline round it
 			sb.bg_color = tint.lerp(Paper.PAPER, 0.25) if not st.begins_with("hover") else tint
 			sb.border_color = Color(Paper.INK, 0.25)

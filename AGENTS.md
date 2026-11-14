@@ -162,9 +162,10 @@ Only redo the ones where the change is visible, and put before/after images in t
   has a medal stays playable. Covered by `tests/economy_test.gd`.
 - World colour on paper (Guillaume, 2026-11-14: the Road Trip page "looked sad"): colour on the
   menus comes from content, never from a UI accent. A world's own colours are `Menu.WORLD_TINT`
-  (pale page/tab) and `Menu.WORLD_INK` (its marker band and its photo tape, `Menu.world_tape()`);
-  medals are stamped filled in their metal (`Menu.medal_stamp()`, `Stamp.fill`). The Road Trip
-  events lie on a page in the open world's tint, joined to its tab like a notebook divider.
+  (pale tab) and `Menu.WORLD_INK` (its marker band and its photo tape, `Menu.world_tape()`);
+  medals are stamped filled in their metal (`Menu.medal_stamp()`, `Stamp.fill`). Colour stays in
+  touches: no full background of world colour behind a page's content (Guillaume tried it on the
+  Road Trip events and didn't like it, 2026-11-14).
   Landscape on a phone (~800 logical px wide) gets one column of stops: two cut the names.
 - Time attack tracks (Guillaume, 2026-11-13): a track is open in Time attack once a campaign event on
   it is unlocked (`Campaign.attack_tracks()`); shut ones are greyed with a padlock and skipped by the
