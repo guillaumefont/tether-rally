@@ -222,7 +222,7 @@ func _to_menu() -> void:
 	ui.show_menu()
 	_start_attract()
 	# test builds: the running build reached the menu (so it works), and look for a newer one
-	var su := get_node_or_null("/root/SelfUpdate")
+	var su := get_node_or_null("/root/SelfUpdate/Updater")
 	if su:
 		su.confirm()
 		su.poke()

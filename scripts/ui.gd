@@ -316,7 +316,9 @@ func layout() -> void:
 	if pause_panel:
 		pause_panel.custom_minimum_size.x = minf(440.0, vp.x - 40.0)
 	if settings_panel:
-		settings_panel.custom_minimum_size.x = minf(440.0, vp.x - 40.0)
+		var wide := not is_portrait()
+		_set_cols.columns = 2 if wide else 1
+		settings_panel.custom_minimum_size.x = minf(820.0 if wide else 440.0, vp.x - 40.0)
 	if _load_box:
 		_place_loading()
 	if coach:
@@ -710,6 +712,7 @@ func set_options(o: Dictionary, opts: Dictionary) -> void:
 # ---------------------------------------------------------------- settings (home screen)
 var settings_ov: Control
 var settings_panel: PanelContainer
+var _set_cols: GridContainer
 var _settings_o: Dictionary
 
 func _build_settings() -> void:
@@ -720,38 +723,41 @@ func _build_settings() -> void:
 	_frost_panel(settings_panel)
 	var vb: VBoxContainer = r[1]
 	_panel_header(vb, "SETTINGS").text = "Saved on this device"
+	# two columns in landscape (options | tutorial and reset), so the page fits a phone's
+	# short screen; one column in portrait (layout() switches them)
+	_set_cols = GridContainer.new()
+	_set_cols.add_theme_constant_override("h_separation", 20)
+	_set_cols.add_theme_constant_override("v_separation", 12)
+	vb.add_child(_set_cols)
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 12)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_cols.add_child(left)
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 10)
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_cols.add_child(right)
 	_settings_o = _make_options()
-	vb.add_child(_settings_o["box"])
+	left.add_child(_settings_o["box"])
 	var tut := icon_button("play", "PLAY THE TUTORIAL", "card", false, 50)
 	tut.focus_mode = Control.FOCUS_NONE
 	tut.pressed.connect(func():
 		hide_settings()
 		tutorial_pressed.emit())
-	vb.add_child(tut)
+	right.add_child(tut)
 	# a second tap within a few seconds confirms; anything else puts the button back
 	_reset_btn = icon_button("retry", "RESET PROGRESS", "card", false, 50)
 	_reset_btn.focus_mode = Control.FOCUS_NONE
 	_reset_btn.pressed.connect(_reset_tap)
-	vb.add_child(_reset_btn)
+	right.add_child(_reset_btn)
 	var done := icon_button("check", "DONE", "go", false, 56)
 	done.pressed.connect(hide_settings)
 	vb.add_child(done)
-	# which build this is (test builds: and whether a newer one is on its way)
-	_version = _label("", 12, C_MUTED)
-	_version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vb.add_child(_version)
 	settings_ov.visible = false
-
-var _version: Label
-
-func version_line() -> String:
-	var su := get_node_or_null("/root/SelfUpdate")
-	return su.version_line() if su else "Development build"
 
 func show_settings(opts: Dictionary) -> void:
 	set_options(_settings_o, opts)
 	_reset_arm(false)
-	_version.text = version_line()
 	settings_ov.visible = true
 
 func hide_settings() -> void:
