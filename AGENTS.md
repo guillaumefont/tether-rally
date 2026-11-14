@@ -70,6 +70,7 @@ godot --headless --path . --script tests/wall_test.gd    # a car on the road edg
 godot --headless --path . --script tests/tutorial_test.gd  # the first-launch tutorial can be finished
 godot --headless --path . --script tests/cosmetics_test.gd  # garage items: prices, every look builds, looks only
 godot --headless --path . --script tests/economy_test.gd    # coins, Track of the day, awards, buying, progress reset
+godot --headless --path . --script tests/monetization_test.gd # ads/store stubs: rewards, daily caps, full-screen pacing, No ads
 godot --headless --path . --script tests/medals_test.gd     # medals saved and shown: race wins, layout bumps
 godot --headless --path . --script tests/race_results_test.gd # race results = order over the line, medal from it
 godot --headless --path . --script tests/attack_unlock_test.gd # Time attack tracks open with the campaign
@@ -123,6 +124,22 @@ menus, HUD...), re-render the affected visuals in the same PR, never "later":
 
 Only redo the ones where the change is visible, and put before/after images in the PR. A full batch of
 `--demo` runs takes 30+ min on the cloud container, so run it in the background.
+
+## Monetization (Guillaume, 2026-11-14)
+
+- Free-to-play on Google Play. The spec is `docs/monetization.md` (decisions dated inside); build from it.
+- Menus never talk to a billing or ad SDK: purchases go through `Store` (`scripts/store.gd`, async
+  `buy(id, done)`, `price(id)`), ads through `Ads` (`scripts/ads.gd`: `rewarded_ready`, `show_rewarded`,
+  `maybe_interstitial`, `ads_removed`), and every tunable number lives in `scripts/monetization.gd`.
+  Debug and `preview` builds use stubs (a purchase is granted at once, a "video" grants after
+  `Ads.stub_delay`), so everything is testable without accounts. A store build must never carry
+  `preview` (the stub would give purchases away) nor `self_update`.
+- A reward is granted only when the ad was watched to the end; "No ads" grants every reward at once.
+  Nothing paid touches race times; Reset progress never takes a purchase back (store.cfg is apart).
+- The app id is temporary and will change: reconfirm it with Guillaume before any Play upload,
+  Play product, AdMob app or ad unit.
+- Tests: `Daily.fake_day` and `Monetization.fake_now` fake the date and clock. A `SceneTree` test that
+  leaves lambdas in a static var (e.g. `Store.on_changed`) aborts at exit: clear them before `quit()`.
 
 ## Design rules
 

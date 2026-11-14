@@ -13,8 +13,13 @@ const Wallet = preload("res://scripts/wallet.gd")
 const BASE := 40       # coins for finishing it
 const PER_TIER := 30   # and for each medal tier of the run
 
+# a test sets this to pretend it is another day (-1: the real date)
+static var fake_day := -1
+
 # days since 1970-01-01 in the player's own time zone
 static func today() -> int:
+	if fake_day >= 0:
+		return fake_day
 	var d := Time.get_date_dict_from_system()
 	return day_of(int(d["year"]), int(d["month"]), int(d["day"]))
 
