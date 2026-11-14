@@ -2089,8 +2089,17 @@ func _make_car(col: Color, ghost := false, look := {}, ghost_col := COL_CHALK) -
 		steel.metallic = 0.6
 		var k := { "top": top, "low": low, "glass": glass, "dark": paint(Color("#1d2229"), 0.6),
 			"steel": steel, "lamp": mat(Color("#fff4c8"), true), "tail": mat(Color("#ff4a3a"), false, 1.2) }
-		var lay := _vehicle(body_id(look, String(th["kit"])), chassis, parts_list, k)
+		var vid := body_id(look, String(th["kit"]))
+		var lay := _vehicle(vid, chassis, parts_list, k)
+		var n_body := parts_list.size()
 		_livery(parts_list, look, col, lay)
+		for i in range(n_body, parts_list.size()):
+			parts_list[i].set_meta("no_ao", true)   # livery decals: not in the baked AO
+		if detail == 1 and ao_on:
+			for p in parts_list:
+				body.add_child(p)
+			parts_list.clear()
+			apply_ao(vid, root)
 	for p in parts_list:
 		if ghost:
 			p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -2098,6 +2107,98 @@ func _make_car(col: Color, ghost := false, look := {}, ghost_col := COL_CHALK) -
 	root.set_meta("body", body)
 	root.set_meta("chassis", chassis)
 	return root
+
+# ---------------------------------------------------------------- baked ambient occlusion
+# Each vehicle's own parts shade each other and the road under it (logs in a bed, wheel
+# arches, the underside of a cab). tools/bake_car_ao.gd ray traces that once per vehicle
+# and per vertex into art/car_ao.res; here it becomes vertex colours multiplied into the paint,
+# so it costs nothing per frame. Game models only (detail 1). After changing a vehicle's
+# parts, rerun the bake (tests/car_ao_test.gd fails until then).
+static var ao_on := true
+const AO_PATH := "res://art/car_ao.res"
+static var _ao_data: Dictionary
+static var _ao_meshes := {}   # "body/part" -> ArrayMesh with the AO colours, shared by every car
+
+# the parts the AO covers, in a fixed order: [MeshInstance3D, transform from the car root].
+# Big boxes get a few subdivisions so the shading has vertices to live on.
+static func ao_parts(car: Node3D) -> Array:
+	var out: Array = []
+	_ao_walk(car, Transform3D.IDENTITY, out, true)
+	return out
+
+static func _ao_walk(n: Node, xf: Transform3D, out: Array, is_root := false) -> void:
+	if n.has_meta("no_ao"):
+		return
+	var t := xf if is_root else xf * (n as Node3D).transform
+	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null and not ((n as MeshInstance3D).mesh is QuadMesh):
+		var mi := n as MeshInstance3D
+		if mi.mesh is BoxMesh:
+			var bm := mi.mesh as BoxMesh
+			bm.subdivide_width = clampi(int(bm.size.x / 0.08), 0, 8)
+			bm.subdivide_height = clampi(int(bm.size.y / 0.08), 0, 8)
+			bm.subdivide_depth = clampi(int(bm.size.z / 0.08), 0, 8)
+		out.append([mi, t])
+	for ch in n.get_children():
+		if ch is Node3D:
+			_ao_walk(ch, t, out)
+
+static func ao_vertex_count(m: Mesh) -> int:
+	var n := 0
+	for si in m.get_surface_count():
+		n += (m.surface_get_arrays(si)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	return n
+
+static func ao_data() -> Dictionary:
+	if _ao_data.is_empty():
+		_ao_data = {}
+		if ResourceLoader.exists(AO_PATH):
+			var r := load(AO_PATH)
+			if r != null and r.has_meta("ao"):
+				_ao_data = r.get_meta("ao")
+	return _ao_data
+
+# returns how many parts got their AO (a part whose vertex count no longer matches the bake
+# is left plain)
+static func apply_ao(id: String, car: Node3D) -> int:
+	var data: Array = ao_data().get(id, [])
+	var parts := ao_parts(car)
+	var done := 0
+	for i in mini(parts.size(), data.size()):
+		var mi: MeshInstance3D = parts[i][0]
+		var src := mi.mesh
+		var key := "%s/%d" % [id, i]
+		var vals: PackedByteArray = data[i]
+		var am: ArrayMesh = _ao_meshes.get(key)
+		if am == null:
+			if ao_vertex_count(src) != vals.size():
+				continue
+			am = ArrayMesh.new()
+			var o := 0
+			for si in src.get_surface_count():
+				var arr := src.surface_get_arrays(si)
+				var nv := (arr[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+				var cols := PackedColorArray()
+				cols.resize(nv)
+				for v in nv:
+					var a := vals[o + v] / 255.0
+					cols[v] = Color(a, a, a)
+				o += nv
+				arr[Mesh.ARRAY_COLOR] = cols
+				am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+			_ao_meshes[key] = am
+		var mats: Array = []
+		for si in src.get_surface_count():
+			mats.append(mi.get_surface_override_material(si) if mi.get_surface_override_material(si) else src.surface_get_material(si))
+		mi.mesh = am
+		for si in mats.size():
+			var m: Material = mats[si]
+			if m is StandardMaterial3D:
+				(m as StandardMaterial3D).vertex_color_use_as_albedo = true
+			mi.set_surface_override_material(si, m)
+		if mi.material_override is StandardMaterial3D:
+			(mi.material_override as StandardMaterial3D).vertex_color_use_as_albedo = true
+		done += 1
+	return done
 
 # ---------------------------------------------------------------- vehicles
 # Each world drives its own kind of vehicle, three to pick from in the Garage (Cosmetics

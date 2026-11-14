@@ -38,6 +38,8 @@ jobs:
         run: ./godot --headless --path . --script tests/tutorial_test.gd
       - name: Garage items are well formed and looks only
         run: ./godot --headless --path . --script tests/cosmetics_test.gd
+      - name: Baked car ambient occlusion matches every vehicle
+        run: ./godot --headless --path . --script tests/car_ao_test.gd
       - name: Coins, Track of the day, awards and progress reset
         run: ./godot --headless --path . --script tests/economy_test.gd
       - name: Ads, Store and monetization stubs (rewards, caps, full-screen pacing, No ads)
