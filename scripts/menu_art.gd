@@ -4,6 +4,7 @@ extends RefCounted
 
 const Medals = preload("res://scripts/medals.gd")
 const Paper = preload("res://scripts/paper.gd")
+const Logo_ = preload("res://scripts/logo_art.gd")
 
 # The UI has no coloured accent: on dark it is chalk cream (titles, icons, the tower emblem
 # and its loading ring), on paper it is ink. The cars keep their amber; gold stays for medals
@@ -16,7 +17,7 @@ const C_ICE_DIM := Color("#9fc0d6")
 const C_TOWER := Color("#2a2f36")
 const C_CAR := Color("#f2b134")
 
-# "TETHER RALLY" with a tower emblem: a car orbits it on a rope and the rotor turns.
+# "TETHER RALLY" with the medal logo: the car laps the tower on its rope.
 class Logo extends Control:
 	var font: Font
 	var font_size := 40
@@ -30,30 +31,8 @@ class Logo extends Control:
 
 	func _draw() -> void:
 		var h := size.y
-		var c := Vector2(h * 0.5, h * 0.5)
-		var R := h * 0.42
-		# frosty disc, tower, rotor
-		if ink:
-			draw_arc(c, R, 0, TAU, 48, Paper.INK, 2.5, true)
-			draw_arc(c, R * 0.78, 0, TAU, 48, Paper.INK_FAINT, 1.5, true)
-		else:
-			draw_circle(c, R, Color(1, 1, 1, 0.08))
-			draw_arc(c, R, 0, TAU, 48, Color(C_ICE, 0.35), 2.0, true)
-		draw_circle(c, h * 0.13, C_TOWER)
-		draw_circle(c, h * 0.1, C_ACCENT)
-		for k in 3:
-			var a := -t * 3.0 + TAU * k / 3.0
-			draw_line(c, c + Vector2.from_angle(a) * h * 0.085, C_TOWER, maxf(2.0, h * 0.03), true)
-		# the car on its tether (both in the car amber), nose along the arc
-		var a := t * 1.6
-		var p := c + Vector2.from_angle(a) * R * 0.78
-		draw_line(c, p, Color(C_CAR, 0.9), maxf(1.5, h * 0.025), true)
-		var fwd := Vector2.from_angle(a + PI / 2)
-		var side := Vector2.from_angle(a)
-		var L := h * 0.12; var W := h * 0.07
-		var body := PackedVector2Array([p + fwd * L + side * W, p + fwd * L - side * W, p - fwd * L - side * W, p - fwd * L + side * W])
-		draw_colored_polygon(body, C_CAR)
-		draw_colored_polygon(PackedVector2Array([p + fwd * L * 0.2 + side * W * 0.7, p + fwd * L * 0.2 - side * W * 0.7, p - fwd * L * 0.4 - side * W * 0.7, p - fwd * L * 0.4 + side * W * 0.7]), Color("#1a2330"))
+		# the medal (scripts/logo_art.gd), the car lapping the tower
+		Logo_.draw_medal(self, Vector2(h * 0.5, h * 0.5), h * 0.5 / (Logo_.R_FRAME + 3.0), t * 1.6)
 		if font == null:
 			return
 		# two-tone wordmark with a soft shadow
@@ -447,39 +426,29 @@ class Splash extends Control:
 		draw_string(font, Vector2(x, base), "TETHER", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, C_ACCENT)
 		draw_string(font, Vector2(x + w1, base), "RALLY", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, C_ACCENT_DIM)
 
-	# the emblem: tower with its spinning rotor, the car lapping it on its tether, and the ring
-	# round them that doubles as the loading indicator. `prog` 0..1 fills the ring in amber from
-	# the top, clockwise (below 0: no ring); `spin` instead runs a short arc round and round.
-	static func draw_emblem(ci: CanvasItem, c: Vector2, R: float, t: float, prog := -1.0, spin := false, dark := true) -> void:
-		var u := R / 0.15
-		ci.draw_circle(c, R * 1.08, Color(C_NIGHT_BOT, 0.55) if dark else Color(1, 1, 1, 0.05))
-		ci.draw_arc(c, R * 1.08, 0, TAU, 64, Color(C_ICE, 0.3), maxf(2.0, u * 0.004), true)
-		ci.draw_arc(c, R * 0.78, 0, TAU, 64, Color(C_ICE, 0.12), maxf(1.0, u * 0.003), true)
+	# the emblem: the medal logo (scripts/logo_art.gd) with the car lapping the tower, and the
+	# ring round it that doubles as the loading indicator. `prog` 0..1 fills the ring in chalk
+	# from the top, clockwise (below 0: no ring); `spin` instead runs a short arc round and round.
+	# R is the old emblem size: the ring sits at R * 1.08.
+	static func draw_emblem(ci: CanvasItem, c: Vector2, R: float, t: float, prog := -1.0, spin := false, _dark := true) -> void:
+		var k := R * 1.08 / Logo_.R_RING
+		var rr := Logo_.R_RING * k
 		var rw := maxf(3.0, R * 0.07)
+		if spin or prog >= 0.0:
+			ci.draw_arc(c, rr, 0, TAU, 64, Color(C_ACCENT, 0.22), maxf(1.5, rw * 0.4), true)
 		if spin:
 			var a0 := t * 4.2 - PI / 2
 			var a1 := a0 + PI * (0.35 + 0.25 * sin(t * 2.1))
-			ci.draw_arc(c, R * 1.08, a0, a1, 32, C_ACCENT, rw, true)
-			ci.draw_circle(c + Vector2.from_angle(a1) * R * 1.08, rw * 0.5, C_ACCENT)
-			ci.draw_circle(c + Vector2.from_angle(a0) * R * 1.08, rw * 0.5, C_ACCENT)
+			ci.draw_arc(c, rr, a0, a1, 32, C_ACCENT, rw, true)
+			ci.draw_circle(c + Vector2.from_angle(a1) * rr, rw * 0.5, C_ACCENT)
+			ci.draw_circle(c + Vector2.from_angle(a0) * rr, rw * 0.5, C_ACCENT)
 		elif prog >= 0.0:
 			var p := clampf(prog, 0.0, 1.0)
 			var a1 := -PI / 2 + TAU * p
-			ci.draw_arc(c, R * 1.08, -PI / 2, a1, maxi(4, int(64 * p)), C_ACCENT, rw, true)
-			ci.draw_circle(c + Vector2.from_angle(-PI / 2) * R * 1.08, rw * 0.5, C_ACCENT)
-			var head := c + Vector2.from_angle(a1) * R * 1.08
+			ci.draw_arc(c, rr, -PI / 2, a1, maxi(4, int(64 * p)), C_ACCENT, rw, true)
+			ci.draw_circle(c + Vector2.from_angle(-PI / 2) * rr, rw * 0.5, C_ACCENT)
+			var head := c + Vector2.from_angle(a1) * rr
 			ci.draw_circle(head, rw * 0.95, Color(C_ACCENT, 0.35 + 0.15 * sin(t * 8.0)))
-			ci.draw_circle(head, rw * 0.6, Color("#e6f1f8"))
-		ci.draw_circle(c, R * 0.3, C_TOWER)
-		ci.draw_circle(c, R * 0.23, C_ACCENT)
-		for k in 3:
-			var ra := -t * 3.0 + TAU * k / 3.0
-			ci.draw_line(c, c + Vector2.from_angle(ra) * R * 0.2, C_TOWER, maxf(2.0, R * 0.06), true)
-		var a := t * 1.6
-		var p := c + Vector2.from_angle(a) * R * 0.78
-		ci.draw_line(c, p, C_CAR, maxf(2.0, R * 0.045), true)
-		var fwd := Vector2.from_angle(a + PI / 2)
-		var side := Vector2.from_angle(a)
-		var L := R * 0.24; var W := R * 0.14
-		ci.draw_colored_polygon(PackedVector2Array([p + fwd * L + side * W, p + fwd * L - side * W, p - fwd * L - side * W, p - fwd * L + side * W]), C_CAR)
-		ci.draw_colored_polygon(PackedVector2Array([p + fwd * L * 0.2 + side * W * 0.7, p + fwd * L * 0.2 - side * W * 0.7, p - fwd * L * 0.4 - side * W * 0.7, p - fwd * L * 0.4 + side * W * 0.7]), Color("#1a2330"))
+			ci.draw_circle(head, rw * 0.6, C_ACCENT)
+		Logo_.draw_medal(ci, c, k, t * 1.6)
+
