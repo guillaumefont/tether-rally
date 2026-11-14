@@ -160,5 +160,44 @@ func _init() -> void:
 	await tap(cup.get_global_rect().get_center() + Vector2(10, 0))
 	check(menu.screen == "garage", "a tap on the Garage bookmark opens the Garage (%s)" % menu.screen)
 
+	# buying a paint pack in the Garage goes through the store's answer (Store.buy calls back)
+	var Store = load("res://scripts/store.gd")
+	var Cosmetics = load("res://scripts/cosmetics.gd")
+	var store_was := FileAccess.get_file_as_string(Store.PATH)
+	var paint_was: String = Cosmetics.equipped("paint")
+	Store._cfg = ConfigFile.new()
+	var g = _find_garage(root)
+	check(g != null, "the Garage page is built")
+	if g:
+		await frames(3)
+		g._set_tab("paint")
+		g._pick(Cosmetics.find("paint", "chrome"))
+		await frames(2)
+		check(g.buy_btn.visible and not g.buy_btn.disabled, "a paid paint offers its pack")
+		check(g.buy_btn.get_meta("label").text == Store.price("chrome_pack"), "the button shows the store's price")
+		g._bought("cancelled", "paint", "chrome", "chrome_pack")
+		check(not Store.owns("chrome_pack") and g.status.text == "Purchase cancelled.", "a cancelled purchase buys nothing (%s)" % g.status.text)
+		g._buy()
+		await frames(2)
+		check(Store.owns("chrome_pack"), "the stub store sells the pack")
+		check(Cosmetics.equipped("paint") == "chrome" and not g.buying, "the bought paint is equipped (%s)" % Cosmetics.equipped("paint"))
+	Cosmetics.equip("paint", paint_was)
+	if store_was == "":
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(Store.PATH))
+	else:
+		var f := FileAccess.open(Store.PATH, FileAccess.WRITE)
+		f.store_string(store_was)
+		f.close()
+	Store._cfg = null
+
 	print("swipe test: %s" % ("PASS" if fails == 0 else "%d failure(s)" % fails))
 	quit(1 if fails else 0)
+
+func _find_garage(n: Node):
+	if n.get_script() == load("res://scripts/garage.gd"):
+		return n
+	for ch in n.get_children():
+		var g = _find_garage(ch)
+		if g:
+			return g
+	return null

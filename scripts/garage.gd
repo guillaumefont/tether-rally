@@ -30,6 +30,7 @@ var home := ""            # the world whose vehicle is on the stage
 var staged := []          # what the stage shows now
 var on_coins: Callable    # the menu's coin counter, refreshed after a purchase
 var trying := {}          # slot -> id of a locked item being tried on
+var buying := false       # a store purchase is open, waiting for its answer
 var scroller              # menu.Scroller holding the grid
 var stage: SubViewportContainer
 var view: WorldView
@@ -196,8 +197,8 @@ func _update_status() -> void:
 		var pr := Store.product(u["product"])
 		status.text = "%s: part of the %s" % [it["name"], pr["name"]]
 		buy_btn.get_meta("icon").kind = "spark"
-		l.text = pr["price"] if Store.available() else "Soon"
-		buy_btn.disabled = not Store.available()
+		l.text = Store.price(u["product"]) if Store.available() else "Soon"
+		buy_btn.disabled = not Store.available() or buying
 		buy_btn.visible = true
 		return
 	if not Cosmetics.can_buy_yet(it):
@@ -215,14 +216,12 @@ func _buy() -> void:
 	var it := Cosmetics.find(tab, shown(tab))
 	var u: Dictionary = it["unlock"]
 	if u.has("product"):
-		var res := Store.buy(u["product"])
-		if res == "ok" or res == "owned":
-			Cosmetics.equip(tab, it["id"])
-			trying.erase(tab)
-			_show_tab()
-			status.text = "%s unlocked. Thank you!" % Store.product(u["product"])["name"]
-		else:
-			status.text = "The store isn't open yet."
+		if buying:
+			return
+		buying = true
+		buy_btn.disabled = true
+		status.text = "Opening the store..."
+		Store.buy(u["product"], _bought.bind(tab, it["id"], u["product"]))
 		return
 	if Cosmetics.buy(tab, it) == "ok":
 		Cosmetics.equip(tab, it["id"])
@@ -231,6 +230,18 @@ func _buy() -> void:
 		status.text = "%s bought and equipped. %d coins left" % [it["name"], Wallet.coins()]
 		if on_coins.is_valid():
 			on_coins.call()
+
+# the store's answer to a purchase (a real store answers after its own sheet closes)
+func _bought(res: String, slot: String, id: String, product: String) -> void:
+	buying = false
+	if res == "ok" or res == "owned":
+		Cosmetics.equip(slot, id)
+		trying.erase(slot)
+		_show_tab()
+		status.text = "%s unlocked. Thank you!" % Store.product(product)["name"]
+		return
+	_update_status()
+	status.text = { "cancelled": "Purchase cancelled.", "unavailable": "The store isn't open yet." }.get(res, "The purchase didn't go through. Try again later.")
 
 # ---------------------------------------------------------------- tiles
 func _tile(it: Dictionary) -> Button:
@@ -275,7 +286,7 @@ func _tile(it: Dictionary) -> Button:
 			sub = Themes.get_theme(it["home"])["name"]
 			sub_col = C_MUTED
 	elif it["unlock"].has("product"):
-		sub = Store.product(it["unlock"]["product"])["price"]
+		sub = Store.price(it["unlock"]["product"])
 		sub_col = C_ACCENT
 	elif not Cosmetics.can_buy_yet(it):
 		sub = _short_req(it)
