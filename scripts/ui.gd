@@ -36,6 +36,10 @@ signal tutorial_pressed   # replay the tutorial (settings screen)
 signal reset_pressed      # erase all progress (settings screen, confirmed with a second tap)
 signal reward_popped(i: int)  # a results badge (record, medal) just popped in: sound + buzz
 signal awards_pressed         # the trophy on the results screen: open the Awards screen
+signal offer_pressed(id: String)  # a rewarded-ad button on the results (x2 coins, Gold ghost...)
+signal no_ads_pressed         # the "No ads?" link under those buttons, or Settings' NO ADS
+signal restore_pressed        # Settings: restore purchases
+signal privacy_pressed        # Settings: privacy choices (the ad consent form)
 
 const MINIMAP := 110.0
 const C_PANEL := Color(0.035, 0.075, 0.082, 0.92)
@@ -437,6 +441,23 @@ func _build_results() -> void:
 	vb.add_child(res_table)
 	res_note = _label("", 14, Paper.INK_SOFT)
 	vb.add_child(res_note)
+	# rewarded-ad offers (x2 coins, Gold ghost, +1 attempt), each a button the player chooses
+	res_offers = HFlowContainer.new()
+	res_offers.add_theme_constant_override("h_separation", 8)
+	res_offers.add_theme_constant_override("v_separation", 6)
+	res_offers.visible = false
+	vb.add_child(res_offers)
+	res_noads = Button.new()
+	res_noads.flat = true
+	res_noads.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	res_noads.add_theme_font_override("font", f_med)
+	res_noads.add_theme_font_size_override("font_size", 13)
+	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		res_noads.add_theme_color_override(k, Paper.INK_SOFT)
+	res_noads.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	res_noads.pressed.connect(func(): no_ads_pressed.emit())
+	res_noads.visible = false
+	vb.add_child(res_noads)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	vb.add_child(row)
@@ -750,6 +771,19 @@ func _build_settings() -> void:
 	_reset_btn.focus_mode = Control.FOCUS_NONE
 	_reset_btn.pressed.connect(_reset_tap)
 	right.add_child(_reset_btn)
+	# purchases (docs/monetization.md): No ads, restore, and the ad consent form where there is one
+	_noads_btn = icon_button("spark", "NO ADS", "card", false, 50)
+	_noads_btn.focus_mode = Control.FOCUS_NONE
+	_noads_btn.pressed.connect(func(): no_ads_pressed.emit())
+	right.add_child(_noads_btn)
+	_restore_btn = icon_button("retry", "RESTORE PURCHASES", "card", false, 50)
+	_restore_btn.focus_mode = Control.FOCUS_NONE
+	_restore_btn.pressed.connect(func(): restore_pressed.emit())
+	right.add_child(_restore_btn)
+	_privacy_btn = icon_button("check", "PRIVACY CHOICES", "card", false, 50)
+	_privacy_btn.focus_mode = Control.FOCUS_NONE
+	_privacy_btn.pressed.connect(func(): privacy_pressed.emit())
+	right.add_child(_privacy_btn)
 	var done := icon_button("check", "DONE", "go", false, 56)
 	done.pressed.connect(hide_settings)
 	vb.add_child(done)
@@ -758,7 +792,24 @@ func _build_settings() -> void:
 func show_settings(opts: Dictionary) -> void:
 	set_options(_settings_o, opts)
 	_reset_arm(false)
+	set_shop(opts.get("shop", {}))
 	settings_ov.visible = true
+
+var _noads_btn: Button
+var _restore_btn: Button
+var _privacy_btn: Button
+
+# the purchase lines of Settings: { no_ads: price text or "" (hidden: owned or no store),
+# restore: bool, privacy: bool, note: text on the restore button after a restore }
+func set_shop(shop: Dictionary) -> void:
+	if _noads_btn == null:
+		return
+	var price := String(shop.get("no_ads", ""))
+	_noads_btn.visible = price != ""
+	(_noads_btn.get_meta("label") as Label).text = "NO ADS  ·  %s" % price
+	_restore_btn.visible = shop.get("restore", false)
+	(_restore_btn.get_meta("label") as Label).text = String(shop.get("note", "RESTORE PURCHASES"))
+	_privacy_btn.visible = shop.get("privacy", false)
 
 func hide_settings() -> void:
 	_reset_arm(false)
@@ -785,6 +836,25 @@ func _reset_arm(on: bool) -> void:
 	var l: Label = _reset_btn.get_meta("label")
 	l.text = "TAP AGAIN TO ERASE ALL PROGRESS" if on else "RESET PROGRESS"
 	l.add_theme_color_override("font_color", Paper.RED_INK if on else Paper.INK)
+
+# the stand-in for a full-screen ad in debug and preview builds: a dark card over everything
+var ad_card: ColorRect
+func show_ad_card(on: bool) -> void:
+	if on and ad_card == null:
+		ad_card = ColorRect.new()
+		ad_card.color = Color("#06121b")
+		ad_card.set_anchors_preset(Control.PRESET_FULL_RECT)
+		ad_card.mouse_filter = Control.MOUSE_FILTER_STOP   # nothing behind it takes a tap
+		var l := _label("AD\n(test build: a real ad shows here)", 22, Color("#f3efe6"), f_bold)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		l.set_anchors_preset(Control.PRESET_FULL_RECT)
+		ad_card.add_child(l)
+		root.add_child(ad_card)
+	if ad_card:
+		ad_card.visible = on
+		if on:
+			root.move_child(ad_card, -1)
 
 func hide_pause() -> void:
 	pause_ov.visible = false
@@ -1194,10 +1264,13 @@ func hide_coach() -> void:
 # rewards: [{ text, col }], badges that pop in one after the other under the title
 # (new record, medal earned); the title bounces when there is any
 var res_rewards: HFlowContainer
+var res_offers: HFlowContainer
+var res_noads: Button
 var res_cup: Button
 var _res_tw: Tween
 func show_results(title: String, rows: Array, note: String, has_next := false, cols := 3, rewards: Array = []) -> void:
 	_show_rewards(rewards)
+	set_offers([])
 	res_cup.visible = false
 	for ch in results.get_children():
 		if ch.has_signal("finished"):   # an award show left from the last results
@@ -1292,7 +1365,37 @@ func _reward_badge(text: String, col: Color) -> PanelContainer:
 	l.autowrap_mode = TextServer.AUTOWRAP_OFF
 	hb.add_child(l)
 	p.add_child(hb)
+	p.set_meta("label", l)
 	return p
+
+# change the words of results badge i (the coin badge after "x2 coins")
+func set_reward_text(i: int, text: String) -> void:
+	if i < res_rewards.get_child_count():
+		var b := res_rewards.get_child(i)
+		if b.has_meta("label"):
+			(b.get_meta("label") as Label).text = text
+
+# the rewarded-ad offers under the results: [{ id, text, icon, ready, busy }]. One that can't
+# play now is greyed with "No video right now", never an error. `no_ads` is the "No ads?" link
+# text ("" hides it).
+func set_offers(offers: Array, no_ads := "") -> void:
+	for ch in res_offers.get_children():
+		res_offers.remove_child(ch)
+		ch.queue_free()
+	for o in offers:
+		var ready: bool = o.get("ready", true)
+		var busy: bool = o.get("busy", false)
+		var txt: String = "Playing..." if busy else (String(o["text"]) if ready else "No video right now")
+		var b := icon_button(String(o.get("icon", "video")), txt, "card", false, 44)
+		b.set_meta("offer", o["id"])
+		b.disabled = busy or not ready
+		var id: String = o["id"]
+		b.pressed.connect(func(): offer_pressed.emit(id))
+		res_offers.add_child(b)
+		set_tile_on(b, false)
+	res_offers.visible = not offers.is_empty()
+	res_noads.text = no_ads
+	res_noads.visible = no_ads != "" and not offers.is_empty()
 
 static func fmt(t: float) -> String:
 	t = snappedf(t, 0.1)

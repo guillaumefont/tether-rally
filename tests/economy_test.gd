@@ -64,6 +64,29 @@ func _init() -> void:
 	expect(Daily.claim(3), 2 * Daily.PER_TIER, "Gold later the same day")
 	expect(Wallet.stat("dailies"), 1, "one daily counted")
 	expect(Wallet.coins(), Daily.BASE + 3 * Daily.PER_TIER, "daily coins in the wallet")
+	# Daily Detour scored attempts: 3 a day, given back, +1 for an ad, a new day starts again
+	var dd := Daily.day_of(2026, 11, 20)
+	Daily.fake_day = dd
+	expect(Daily.attempts_left(), 3, "three scored attempts a day")
+	Daily.use_attempt()
+	Daily.use_attempt()
+	expect(Daily.attempts_left(), 1, "two used")
+	Daily.give_back_attempt()
+	expect(Daily.attempts_left(), 2, "a first-lap quit gives one back")
+	Daily.use_attempt()
+	Daily.use_attempt()
+	expect(Daily.attempts_left(), 0, "none left")
+	Daily.use_attempt()
+	expect(Daily.attempts_left(), 0, "never below none")
+	Daily.add_extra()
+	expect(Daily.attempts_left(), 1, "+1 scored attempt for an ad")
+	Daily.note_time(12.5)
+	Daily.note_time(13.0)
+	expect(Daily.best_today(), 12.5, "best time of the day")
+	Daily.fake_day = dd + 1
+	expect(Daily.attempts_left(), 3, "three again the next day")
+	expect(Daily.best_today(), -1.0, "no best yet the next day")
+	Daily.fake_day = -1
 	# buying
 	var signal_paint := Cosmetics.find("paint", "signal")
 	var cost := Cosmetics.price(signal_paint)

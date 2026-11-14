@@ -52,6 +52,8 @@ var tower_nodes := {}      # anchor (curve) index -> {spinner, rings: [MeshInsta
 var rotor_h := PackedFloat32Array()  # rotor height of each curve (world units)
 var car_nodes: Array = []  # per car: {root, body, tether, marker}
 var ghost_node: Node3D
+var gold_node: Node3D   # the Gold medal ghost (scripts/gold_ghosts.gd), beside the player's own
+const COL_GOLD_GHOST := Color("#f2c84a")
 var post_nodes: Array = []
 var gem_nodes: Array = []
 
@@ -185,6 +187,7 @@ func _clear(tr: TrackData) -> void:
 	post_nodes.clear()
 	gem_nodes.clear()
 	ghost_node = null
+	gold_node = null
 	parts.clear()
 
 func _build_ground() -> void:
@@ -2059,7 +2062,7 @@ void fragment() {
 	m.set_shader_parameter("tint", c)
 	return m
 
-func _make_car(col: Color, ghost := false, look := {}) -> Node3D:
+func _make_car(col: Color, ghost := false, look := {}, ghost_col := COL_CHALK) -> Node3D:
 	var root := Node3D.new()
 	var chassis := Node3D.new()   # follows the road slope
 	root.add_child(chassis)
@@ -2067,7 +2070,7 @@ func _make_car(col: Color, ghost := false, look := {}) -> Node3D:
 	chassis.add_child(body)
 	var parts_list: Array = []
 	if ghost:
-		var gc := Color(COL_CHALK, 0.35)
+		var gc := Color(ghost_col, 0.35)
 		parts_list.append(box(Vector3(130, 26, 74), gc, Vector3(0, 24, 0)))
 		parts_list.append(box(Vector3(46, 20, 56), Color(COL_INFIELD, 0.35), Vector3(-4, 46, 0)))
 	else:
@@ -2719,7 +2722,7 @@ static func rival_look(c) -> Dictionary:
 
 # looks: the cosmetic look of each human player's car (by player number); the AI rivals
 # wear their own fixed liveries (RIVAL_LIVERIES by roster colour)
-func setup_cars(race: Race, has_ghost: bool, looks := {}) -> void:
+func setup_cars(race: Race, has_ghost: bool, looks := {}, has_gold := false) -> void:
 	wind.clear()
 	_winds.clear()
 	for cn in car_nodes:
@@ -2729,6 +2732,9 @@ func setup_cars(race: Race, has_ghost: bool, looks := {}) -> void:
 	if ghost_node:
 		ghost_node.queue_free()
 		ghost_node = null
+	if gold_node:
+		gold_node.queue_free()
+		gold_node = null
 	for c in race.cars:
 		var lk: Dictionary = looks.get(c.human, {}) if c.human >= 0 else rival_look(c)
 		var root := _make_car(c.color, false, lk)
@@ -2758,6 +2764,11 @@ func setup_cars(race: Race, has_ghost: bool, looks := {}) -> void:
 		ghost_node = _make_car(COL_CHALK, true)
 		ghost_node.visible = false
 		dyn_root.add_child(ghost_node)
+	if has_gold:
+		gold_node = _make_car(COL_GOLD_GHOST, true, {}, COL_GOLD_GHOST)
+		gold_node.visible = false
+		gold_node.set_meta("gold_ghost", true)
+		dyn_root.add_child(gold_node)
 
 func car_height(race: Race, c) -> float:
 	var base := track.height_at(c.s)
@@ -2773,7 +2784,7 @@ func car_height(race: Race, c) -> float:
 	return base
 
 # ---------------------------------------------------------------- per frame
-func sync(race: Race, phase: String, ghost_sample, aims: Dictionary, dt: float) -> void:
+func sync(race: Race, phase: String, ghost_sample, aims: Dictionary, dt: float, gold_sample = null) -> void:
 	fx_time += dt
 	# rotors
 	for idx in tower_nodes:
@@ -2835,16 +2846,20 @@ func sync(race: Race, phase: String, ghost_sample, aims: Dictionary, dt: float) 
 				tether.transform = Transform3D(Basis(xax, yax * len, zax), mid)
 			else:
 				tether.visible = false
-		if ghost_node:
-			if ghost_sample != null and phase != "menu":
-				ghost_node.visible = true
-				var gp := Vector2(ghost_sample.x, ghost_sample.y)
+		for pair in [[ghost_node, ghost_sample], [gold_node, gold_sample]]:
+			var gn: Node3D = pair[0]
+			var smp = pair[1]
+			if gn == null:
+				continue
+			if smp != null and phase != "menu":
+				gn.visible = true
+				var gp := Vector2(smp.x, smp.y)
 				var nr := track.nearest_raw(gp)
 				var gh := track.height_at(track.s_of(nr["i"], nr["t"]))
-				ghost_node.position = w3(gp, gh + ROAD_Y)
-				ghost_node.rotation = Vector3(0, -ghost_sample.z, 0)
+				gn.position = w3(gp, gh + ROAD_Y)
+				gn.rotation = Vector3(0, -smp.z, 0)
 			else:
-				ghost_node.visible = false
+				gn.visible = false
 	_update_fx(dt)
 	_update_wind(dt)
 

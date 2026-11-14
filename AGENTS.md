@@ -71,6 +71,8 @@ godot --headless --path . --script tests/tutorial_test.gd  # the first-launch tu
 godot --headless --path . --script tests/cosmetics_test.gd  # garage items: prices, every look builds, looks only
 godot --headless --path . --script tests/economy_test.gd    # coins, Track of the day, awards, buying, progress reset
 godot --headless --path . --script tests/monetization_test.gd # ads/store stubs: rewards, daily caps, full-screen pacing, No ads
+godot --headless --path . --script tests/results_offers_test.gd # results ad offers, Gold ghost, Daily Detour attempts, full-screen ads
+godot --headless --path . --script tests/store_build_test.gd  # Play preset: AAB, no preview/self_update
 godot --headless --path . --script tests/medals_test.gd     # medals saved and shown: race wins, layout bumps
 godot --headless --path . --script tests/race_results_test.gd # race results = order over the line, medal from it
 godot --headless --path . --script tests/attack_unlock_test.gd # Time attack tracks open with the campaign
@@ -90,7 +92,8 @@ godot --headless --path . --script tests/self_update_test.gd  # test APKs update
 ```
 
 After changing a track layout, rerun `tools/gen_obstacles.gd` (posts placed off the AI's racing line,
-`scripts/obstacle_spots.gd`, ~3 min), then `tools/gen_medals.gd` to refresh `scripts/medal_times.gd`.
+`scripts/obstacle_spots.gd`, ~3 min), then `tools/gen_medals.gd` to refresh `scripts/medal_times.gd`,
+then `tools/gen_gold_ghosts.gd` (the Gold medal ghosts in `ghosts/gold.res`, ~1 min; `tests/results_offers_test.gd` checks they lap at the Gold time).
 Also bump `LAYOUT_VERSION` in `scripts/records.gd`, so players' best times and ghosts from the old
 road are dropped (medals and campaign progress stay). `tools/tighten_layout.gd` searches for a
 layout with short links (about one lane between bends) that still passes the layout check.
@@ -138,6 +141,8 @@ Only redo the ones where the change is visible, and put before/after images in t
   Nothing paid touches race times; Reset progress never takes a purchase back (store.cfg is apart).
 - The app id is temporary and will change: reconfirm it with Guillaume before any Play upload,
   Play product, AdMob app or ad unit.
+- Export presets: "Android" is the test APK (CI adds `preview,self_update`), "Web" gets `preview` in CI, and
+  "Android Play" is the store AAB (Gradle): never give it `preview` or `self_update` (`tests/store_build_test.gd`).
 - Tests: `Daily.fake_day` and `Monetization.fake_now` fake the date and clock. A `SceneTree` test that
   leaves lambdas in a static var (e.g. `Store.on_changed`) aborts at exit: clear them before `quit()`.
 
@@ -227,7 +232,7 @@ Only redo the ones where the change is visible, and put before/after images in t
 - Tether: fixed length, set by the distance to the tower at the moment of hooking. It never
   shortens (no ratchet, no reel-in) and never pays out; hooked early, the rope hangs slack until the
   car swings out to that length. Grab timing alone sets the line. After changing the driving rules,
-  rerun `tools/gen_medals.gd` and bump `LAYOUT_VERSION` in `scripts/records.gd` (old times were set
+  rerun `tools/gen_medals.gd` (then `tools/gen_gold_ghosts.gd`) and bump `LAYOUT_VERSION` in `scripts/records.gd` (old times were set
   under the old rules). The bump drops best times and ghosts only: medals live in their own keys
   (`medal_trial`, `medal_race` in `records.cfg`), so anything a player earned must be saved as its
   own value, never only worked out from a time the bump erases.

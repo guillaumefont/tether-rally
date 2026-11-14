@@ -274,6 +274,10 @@ class Icon extends Control:
 				for k in 3:
 					draw_arc(c + Vector2(0, s * (0.06 * k - 0.06)), s * (0.3 - k * 0.07), 0, TAU, 32, col, lw * 0.8, true)
 				draw_line(c + Vector2(s * 0.3, 0), c + Vector2(s * 0.42, s * 0.3), col, lw * 0.8, true)
+			"video":      # a screen with a play mark: a rewarded video
+				var scr := Rect2(c + Vector2(-s * 0.34, -s * 0.24), Vector2(s * 0.68, s * 0.48))
+				draw_rect(scr, col, false, lw)
+				draw_colored_polygon(PackedVector2Array([c + Vector2(-s * 0.08, -s * 0.13), c + Vector2(s * 0.14, 0), c + Vector2(-s * 0.08, s * 0.13)]), col)
 			"lock":
 				var body_r := Rect2(c + Vector2(-s * 0.22, -s * 0.04), Vector2(s * 0.44, s * 0.34))
 				var lc := col if ink else Color(C_ICE_DIM, 0.8)
