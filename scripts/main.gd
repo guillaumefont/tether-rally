@@ -995,7 +995,7 @@ func _drop_attempt() -> void:
 		Daily.give_back_attempt()
 
 # ---------------------------------------------------------------- rewarded-ad offers
-const OFFER_TEXT := { "double_coins": "x2 coins", "gold_ghost": "Gold ghost", "daily_extra": "+1 scored attempt" }
+const OFFER_TEXT := { "double_coins": "x2 COINS", "gold_ghost": "GOLD GHOST", "daily_extra": "+1 SCORED ATTEMPT" }
 const OFFER_ICON := { "double_coins": "coin", "gold_ghost": "ghost", "daily_extra": "retry" }
 
 # what the offers rule (Monetization.results_offers) needs to know about this results screen
