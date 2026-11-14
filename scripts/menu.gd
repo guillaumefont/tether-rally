@@ -549,7 +549,7 @@ func show_home() -> void:
 # tap it to restart into it (or to fetch the new APK). It appears as soon as the download
 # finishes, without rebuilding the page.
 func _update_slip() -> void:
-	var su := get_node_or_null("/root/SelfUpdate")
+	var su := get_node_or_null("/root/SelfUpdate/Updater")
 	if su == null or screen != "home" or body == null:
 		return
 	if not su.changed.is_connected(_update_slip):

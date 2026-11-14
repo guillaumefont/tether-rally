@@ -25,8 +25,13 @@
   presets or `self_update.gd` (the `SHELL` fingerprint CI writes into `scripts/build_info.gd`): a
   change to any of those makes installed apps offer the new APK instead (one tap to install, Android
   always asks). Only CI test APKs carry the `self_update` feature; a store build must never have it
-  (Play forbids self-updating code). Something that must run before the game data is mounted
-  belongs in `self_update.gd`, and nothing else may load before it.
+  (Play forbids self-updating code). Keep `self_update.gd` to what must run before the game data
+  is mounted (it is frozen into the APK, and changing it forces a reinstall); checking, downloading
+  and the UI text live in `scripts/updater.gd` (`/root/SelfUpdate/Updater`), which comes from the
+  mounted data and so updates itself. A PR's APK falls back to main's `update.json` once its PR
+  folder is gone. Settings shows the build and a CHECK FOR UPDATE button (`ui._build_version`).
+- Settings is two columns in landscape (`_set_cols`, switched in `ui.layout()`): a landscape phone
+  is only ~450 logical px tall. Check that anything added there still fits (the self-update test does).
 
 ## Keeping this file up to date
 

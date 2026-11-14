@@ -316,7 +316,9 @@ func layout() -> void:
 	if pause_panel:
 		pause_panel.custom_minimum_size.x = minf(440.0, vp.x - 40.0)
 	if settings_panel:
-		settings_panel.custom_minimum_size.x = minf(440.0, vp.x - 40.0)
+		var wide := not is_portrait()
+		_set_cols.columns = 2 if wide else 1
+		settings_panel.custom_minimum_size.x = minf(820.0 if wide else 440.0, vp.x - 40.0)
 	if _load_box:
 		_place_loading()
 	if coach:
@@ -710,6 +712,7 @@ func set_options(o: Dictionary, opts: Dictionary) -> void:
 # ---------------------------------------------------------------- settings (home screen)
 var settings_ov: Control
 var settings_panel: PanelContainer
+var _set_cols: GridContainer
 var _settings_o: Dictionary
 
 func _build_settings() -> void:
@@ -720,38 +723,123 @@ func _build_settings() -> void:
 	_frost_panel(settings_panel)
 	var vb: VBoxContainer = r[1]
 	_panel_header(vb, "SETTINGS").text = "Saved on this device"
+	# two columns in landscape (options | version and the rest), so the page fits a phone's
+	# short screen; one column in portrait (layout() switches them)
+	_set_cols = GridContainer.new()
+	_set_cols.add_theme_constant_override("h_separation", 20)
+	_set_cols.add_theme_constant_override("v_separation", 12)
+	vb.add_child(_set_cols)
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 12)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_cols.add_child(left)
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 10)
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_set_cols.add_child(right)
 	_settings_o = _make_options()
-	vb.add_child(_settings_o["box"])
+	left.add_child(_settings_o["box"])
+	_build_version(right, 0)
 	var tut := icon_button("play", "PLAY THE TUTORIAL", "card", false, 50)
 	tut.focus_mode = Control.FOCUS_NONE
 	tut.pressed.connect(func():
 		hide_settings()
 		tutorial_pressed.emit())
-	vb.add_child(tut)
+	right.add_child(tut)
 	# a second tap within a few seconds confirms; anything else puts the button back
 	_reset_btn = icon_button("retry", "RESET PROGRESS", "card", false, 50)
 	_reset_btn.focus_mode = Control.FOCUS_NONE
 	_reset_btn.pressed.connect(_reset_tap)
-	vb.add_child(_reset_btn)
+	right.add_child(_reset_btn)
 	var done := icon_button("check", "DONE", "go", false, 56)
 	done.pressed.connect(hide_settings)
 	vb.add_child(done)
-	# which build this is (test builds: and whether a newer one is on its way)
-	_version = _label("", 12, C_MUTED)
-	_version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vb.add_child(_version)
 	settings_ov.visible = false
 
-var _version: Label
+# ---------------------------------------------------------------- game version (settings)
+# Guillaume, 2026-11-14: "Add a game version somewhere in the settings menu with a button to
+# check for an update". A boxed line between the options and the tutorial: the build running
+# now, what the updater is doing, and one button that checks, restarts into a downloaded
+# build, or fetches the new APK (scripts/updater.gd). It follows the updater live while open.
+var _ver_box: PanelContainer
+var _ver_title: Label
+var _ver_status: Label
+var _ver_btn: Button
 
+func _build_version(vb: VBoxContainer, at: int) -> void:
+	_ver_box = PanelContainer.new()
+	var sb := Paper.box(Paper.CARD, Paper.INK, 2, 3)
+	sb.set_content_margin_all(12)
+	_ver_box.add_theme_stylebox_override("panel", sb)
+	_ver_box.set_meta("version_box", true)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 4)
+	_ver_box.add_child(col)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	var cap := _label("GAME VERSION", 12, Paper.INK_SOFT, f_bold)
+	cap.autowrap_mode = TextServer.AUTOWRAP_OFF
+	cap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(cap)
+	_ver_title = _label("", 20, Paper.INK, f_display)
+	_ver_title.autowrap_mode = TextServer.AUTOWRAP_OFF
+	head.add_child(_ver_title)
+	col.add_child(head)
+	# what the updater is doing, and the button beside it
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	_ver_status = _label("", 14, Paper.INK, f_bold)
+	_ver_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_ver_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_ver_status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_ver_status.custom_minimum_size.x = 120
+	row.add_child(_ver_status)
+	_ver_btn = icon_button("retry", "CHECK FOR UPDATE", "card", false, 44)
+	_ver_btn.focus_mode = Control.FOCUS_NONE
+	_ver_btn.set_meta("check_update", true)
+	_ver_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_ver_btn.pressed.connect(func():
+		var u := _updater()
+		if u:
+			u.press())
+	row.add_child(_ver_btn)
+	col.add_child(row)
+	vb.add_child(_ver_box)
+	vb.move_child(_ver_box, at)
+
+func _updater() -> Node:
+	return get_node_or_null("/root/SelfUpdate/Updater")
+
+func _refresh_version() -> void:
+	if _ver_box == null:
+		return
+	var u := _updater()
+	_ver_title.text = u.version_title() if u else "Development build"
+	_ver_status.text = u.status_text() if u else "Made by hand: no updates"
+	var bt: String = u.button_text() if u else ""
+	_ver_btn.visible = bt != ""
+	if bt != "":
+		var l: Label = _ver_btn.get_meta("label")
+		l.text = bt
+		var ic = _ver_btn.get_meta("icon")
+		ic.kind = "play" if u.status == "ready" else "retry"
+		ic.queue_redraw()
+		_ver_btn.custom_minimum_size.x = l.get_minimum_size().x + 44 * 0.5 + 38.0
+		_ver_btn.disabled = not u.button_enabled()
+		_tile_look(_ver_btn, "go" if u.status in ["ready", "apk"] else "card", false)
+
+# one line: the build and what the updater is doing
 func version_line() -> String:
-	var su := get_node_or_null("/root/SelfUpdate")
-	return su.version_line() if su else "Development build"
+	var u := _updater()
+	return u.version_line() if u else "Development build"
 
 func show_settings(opts: Dictionary) -> void:
 	set_options(_settings_o, opts)
 	_reset_arm(false)
-	_version.text = version_line()
+	var u := _updater()
+	if u and not u.changed.is_connected(_refresh_version):
+		u.changed.connect(_refresh_version)
+	_refresh_version()
 	settings_ov.visible = true
 
 func hide_settings() -> void:
