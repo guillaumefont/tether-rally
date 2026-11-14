@@ -111,7 +111,7 @@ func _init() -> void:
 	check(menu.screen == "list" and menu._scroller.get_global_rect().encloses(r), "back: the list shows that track's card (%d)" % t1)
 
 	# the campaign opens on the world select; tapping the world in play lists its events as
-	# lines; a world tab switches world; back returns to the world select
+	# lines; back returns to the world select
 	menu.kind = "campaign"
 	menu.world = -1
 	menu.show_list()
@@ -124,8 +124,34 @@ func _init() -> void:
 	await tap(photos[w0].get_global_rect().get_center())
 	await frames(3)
 	check(menu.world == w0 and menu._scroller.content.get_child(0).get_child_count() == Campaign.chapter_size(w0), "campaign opens on the world in play (%d), one line per event" % menu.world)
-	var tabs: Array = menu.body.find_children("*", "Button", true, false).filter(func(b): return b.custom_minimum_size.y == 66)
-	check(tabs.size() == Campaign.CHAPTERS.size(), "a tab per world (%d)" % tabs.size())
+	# Guillaume, 2026-11-14: no world tabs on the stops (the world select changes world) and no
+	# separate page per stop: the picked stop opens in the list with its targets and Start
+	var stop_lines: Array = menu.body.find_children("*", "Button", true, false).filter(func(b): return b.has_meta("stop"))
+	check(stop_lines.size() == Campaign.chapter_size(w0), "only the world's stops take taps, no world tabs (%d)" % stop_lines.size())
+	var first: int = menu._first_open_event()
+	var opened: Array = menu.body.find_children("*", "Control", true, false).filter(func(n): return n.has_meta("stop_details"))
+	check(opened.size() == 1 and opened[0].get_meta("stop_details") == first, "the next stop to play is open in the list")
+	var other: Button = null
+	for b in stop_lines:
+		if b.get_meta("stop") != first and not b.disabled:
+			other = b
+			break
+	check(other != null, "another open stop to tap")
+	if other:
+		var oi: int = other.get_meta("stop")
+		await tap(other.get_global_rect().get_center())
+		await frames(3)
+		opened = menu.body.find_children("*", "Control", true, false).filter(func(n): return n.has_meta("stop_details"))
+		check(menu.screen == "list" and opened.size() == 1 and opened[0].get_meta("stop_details") == oi, "tapping a stop opens it in place, no stop page (%s)" % menu.screen)
+		var started := []
+		menu.start_event.connect(func(e): started.append(e), CONNECT_ONE_SHOT)
+		var go: Array = menu.body.find_children("*", "Button", true, false).filter(func(b): return b.has_meta("stop_start"))
+		check(go.size() == 1, "one Start button, on the open stop")
+		if go.size() == 1:
+			menu.start_event.disconnect(main._start_event)   # only look at what Start asks for
+			await tap(go[0].get_global_rect().get_center())
+			menu.start_event.connect(main._start_event)
+			check(started.size() == 1 and started[0]["idx"] == oi and started[0]["kind"] == "campaign", "Start races the open stop")
 	menu.go_back()
 	await frames(3)
 	check(menu.screen == "worlds", "back from a world's events goes to the world select (%s)" % menu.screen)
