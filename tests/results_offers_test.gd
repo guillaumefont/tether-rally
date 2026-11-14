@@ -1,4 +1,6 @@
 # Rewarded-ad offers on the results screen (docs/monetization.md):
+# - Gold ghost: one per track for Standard/Reverse/Obstacles (not Collect) lapping at the Gold
+#   time; offered after a run without Gold, unlocked for good by the video, not after a Gold run
 # - "x2 coins": the wallet gets the run's coins a second time, once per results screen; the
 #   badge says so; the daily cap holds; never after Off the Map, the tutorial or a 2-player race
 #   godot --headless --path . --script tests/results_offers_test.gd
@@ -130,6 +132,54 @@ func _run() -> void:
 	main.ui.show_results("TUTORIAL DONE", [], "", false, 2)
 	await frames(1)
 	check(offers().is_empty(), "the tutorial's end screen has no offers")
+
+	# ---- the Gold ghost: every lap variant has one that laps at the Gold time
+	var GoldGhosts = load("res://scripts/gold_ghosts.gd")
+	var n := 0
+	for d in Defs.TRACKS:
+		for v in ["standard", "reverse", "obstacles", "collect"]:
+			var has: bool = GoldGhosts.has(d["name"], v)
+			if v == "collect":
+				if has:
+					check(false, "no Gold ghost on Collect (%s)" % d["name"])
+				continue
+			if not has:
+				check(false, "Gold ghost for %s %s" % [d["name"], v])
+				continue
+			n += 1
+			var g: float = Medals.targets(d["name"], v)[2]
+			var lt: float = GoldGhosts.lap_time(d["name"], v)
+			if absf(lt - g) > 0.05:
+				check(false, "%s %s Gold ghost laps in %.3f, Gold is %.2f" % [d["name"], v, lt, g])
+			if GoldGhosts.trace(d["name"], v).size() != GoldGhosts.hooked(d["name"], v).size():
+				check(false, "%s %s hook marks match the samples" % [d["name"], v])
+	check(n == Defs.TRACKS.size() * 3, "a Gold ghost per track for Standard, Reverse and Obstacles (%d)" % n)
+
+	# ---- offered after a run without Gold, unlocked for good by the video
+	Store._cfg = ConfigFile.new()   # no "No ads" any more
+	Wallet.reset()
+	Records.reset()
+	await start(ev)
+	check(main.view.gold_node == null, "no Gold ghost before it is unlocked")
+	var silver: float = Medals.targets(name, "standard")[1]
+	await finish_trial(silver - 0.05)   # Silver, not Gold
+	check(offers().has("gold_ghost"), "Gold ghost offered after a run without Gold (%s)" % str(offers()))
+	offer_btn("gold_ghost").pressed.emit()
+	await frames(2)
+	check(GoldGhosts.unlocked(name, "standard"), "the video unlocks it")
+	check(not offers().has("gold_ghost"), "the offer goes once taken")
+	await start(ev)
+	check(main.view.gold_node != null and not main.gold_ghost.is_empty(), "the next run brings the Gold ghost")
+	check(not GoldGhosts.unlocked(name, "reverse"), "only on that track + variant")
+	await finish_trial(silver - 0.05)
+	check(not offers().has("gold_ghost"), "not offered again once open")
+	# a Gold run never offers it
+	await start({ "track": 1, "variant": "standard", "mode": "trial", "humans": 1, "kind": "attack", "idx": 0, "theme": "" })
+	await finish_trial(Medals.targets(Defs.TRACKS[1]["name"], "standard")[2] - 0.1)
+	check(not offers().has("gold_ghost"), "no Gold ghost offer after a Gold run")
+	# Reset progress closes it again
+	Wallet.reset()
+	check(not GoldGhosts.unlocked(name, "standard"), "Reset progress closes unlocked Gold ghosts")
 
 	# put things back
 	Daily.fake_day = -1

@@ -25,6 +25,7 @@ const AwardShow = preload("res://scripts/award_show.gd")
 const Ads = preload("res://scripts/ads.gd")
 const Store = preload("res://scripts/store.gd")
 const Monetization = preload("res://scripts/monetization.gd")
+const GoldGhosts = preload("res://scripts/gold_ghosts.gd")
 
 var view: WorldView
 var ui: UI
@@ -50,6 +51,7 @@ var medal_targets: Array = []   # trial medal target times, bronze..pivot
 var last_beep := 4
 var end_timer := 0.0
 var ghost: Array = []
+var gold_ghost: Array = []   # the Gold medal ghost, once unlocked for this track + variant
 var new_record := false
 var touch_owner := {}        # touch index -> player
 var paused := false
@@ -62,6 +64,7 @@ var pay_total := 0           # coins this run paid (medal + Daily Detour): what 
 var offers_used := {}        # offers already taken on this results screen
 var offer_busy := ""         # the offer whose video is playing
 var results_n := 0           # counts results screens, so a late reward never touches a newer one
+var gold_offer := false      # these results may offer the Gold ghost (a Time trial run without Gold)
 var tutorial := false        # the run is the tutorial (Defs.TUTORIAL), driven by `tut`
 var tut: Tutorial = null
 # behind the menu: AI drivers race a snowy track, changing track every ATTRACT_SECS
@@ -392,7 +395,9 @@ func new_race(built: TrackData = null) -> void:
 	themes_before = Themes.ORDER.filter(func(t): return Campaign.theme_unlocked(t))
 	worlds_before = range(Campaign.CHAPTERS.size()).filter(func(c): return Campaign.chapter_done(c))
 	ghost = Records.get_ghost(rec_key()) if mode == "trial" and not tutorial else []
-	view.setup_cars(race, mode == "trial" and not tutorial, _dress(race))
+	var nm: String = cur_def()["name"]
+	gold_ghost = GoldGhosts.trace(nm, variant) if mode == "trial" and not tutorial and humans == 1 and GoldGhosts.unlocked(nm, variant) else []
+	view.setup_cars(race, mode == "trial" and not tutorial, _dress(race), not gold_ghost.is_empty())
 	# your vehicle in this world sets the engine sound
 	sfx.set_vehicle(WorldView.body_id(Cosmetics.player_look(), String(view.th["kit"])))
 	new_record = false
@@ -560,7 +565,7 @@ func _process(delta: float) -> void:
 			view.sync(attract, phase, null, {}, dt)
 			view.update_camera(attract, "attract", dt)
 		else:
-			view.sync(race, phase, _ghost_sample(), _aims(), dt)
+			view.sync(race, phase, _ghost_sample(), _aims(), dt, _ghost_sample(gold_ghost))
 			_pick_shot(dt)
 			view.update_camera(race if phase != "menu" else null, phase, dt)
 
@@ -622,12 +627,13 @@ func _aims() -> Dictionary:
 				aims[p].append(c.color)
 	return aims
 
-func _ghost_sample():
-	if ghost.is_empty() or race == null or phase == "menu" or not Settings.get_opt("ghost"):
+func _ghost_sample(g = null):
+	var tr: Array = ghost if g == null else g
+	if tr.is_empty() or race == null or phase == "menu" or not Settings.get_opt("ghost"):
 		return null
 	var c0 = race.cars[0]
 	var k := int((race.clock - c0.lap_start if c0.lap >= 1 else 0.0) * 30.0)
-	return ghost[k] if k < ghost.size() else null
+	return tr[k] if k < tr.size() else null
 
 func _handle_events() -> void:
 	for e in race.events:
@@ -803,6 +809,7 @@ func _show_results() -> void:
 	pay_total = 0
 	offers_used = {}
 	offer_busy = ""
+	gold_offer = false
 	results_n += 1
 	ui.hide_streak()
 	ui.hide_lap_note()
@@ -844,6 +851,7 @@ func _show_results() -> void:
 		var run_val: float = c.finish_time if track.tokens.size() > 0 else c.best_lap
 		var run_tier := Medals.trial_tier(name, variant, run_val) if c.finished else 0
 		var coins := Wallet.medal_coins(start_tier, run_tier)
+		gold_offer = GoldGhosts.offer(name, variant, c.finished, run_tier, maxi(start_tier, tier))
 		var daily := 0
 		if c.finished and Daily.is_today(track_idx, variant):
 			daily = Daily.claim(run_tier)
@@ -959,7 +967,7 @@ const OFFER_ICON := { "double_coins": "coin", "gold_ghost": "ghost", "daily_extr
 
 # what the offers rule (Monetization.results_offers) needs to know about this results screen
 func _offer_ctx() -> Dictionary:
-	return { "total": pay_total, "free": free_run, "tutorial": tutorial, "humans": humans, "used": offers_used }
+	return { "total": pay_total, "free": free_run, "tutorial": tutorial, "humans": humans, "used": offers_used, "gold_ghost": gold_offer }
 
 func _refresh_offers() -> void:
 	if phase != "results" or tutorial:
@@ -992,6 +1000,11 @@ func _offer_granted(id: String, total: int, screen: int) -> void:
 			if here:
 				ui.set_reward_text(0, "+%d x2 COINS" % total)
 				sfx.blip(1320, 0.2, "square", 0.05, 300)
+		"gold_ghost":
+			GoldGhosts.unlock(cur_def()["name"], variant)
+			if here:
+				ui.res_note.text = "Gold ghost unlocked on %s: it laps at the Gold time beside your own ghost. Tap Again to chase it." % cur_def()["name"]
+				sfx.blip(990, 0.2, "triangle", 0.05, 300)
 	if here:
 		offer_busy = ""
 		offers_used[id] = true
