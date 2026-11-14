@@ -132,10 +132,11 @@ Only redo the ones where the change is visible, and put before/after images in t
   logo, icon hub) it is chalk cream `#f3efe6` (`C_ACCENT` in `menu_art.gd`, mirrored in `ui.gd`).
   Amber `#f2b134` is the player's car and rope; gold is only for medals and coins (`C_COIN`). Don't
   bring back a blue (or any new) accent colour; `tests/colours_test.gd` checks it (it also counts
-  saturated blue pixels in the icons, so keep the icon's dusk sky violet or dark, not mid blue).
+  saturated blue pixels in the icons).
 - Logo (Guillaume, 2026-11-14): "the medal", a round chalk-cream medal, dark inside, the amber car
-  swinging round the tower seen from above with three speed trails; on the app icon it stands in
-  front of a snowy dusk scene. One source, `scripts/logo_art.gd` (SVG strings, -50..50 box): the
+  swinging round the tower seen from above with three speed trails. No background behind it
+  (Guillaume, 2026-11-14): the icon is the medal on transparent; where an icon must be opaque (store
+  icon, Android adaptive background) it is one flat colour, `ICON_BG`. One source, `scripts/logo_art.gd` (SVG strings, -50..50 box): the
   game draws its frame as a texture and the moving parts in code (`draw_medal`, used by the menu
   header `Logo` and the loading emblem/ring), and the web page `web/shell_template.html` repeats
   the same SVG. After changing it, run `tools/gen_icons.gd` (icon.svg, `icons/`, `store/icon-512.png`),
