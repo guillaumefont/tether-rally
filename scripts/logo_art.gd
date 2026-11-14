@@ -28,7 +28,12 @@ const CAR := [
 	[8.2, -3.6, 1.0, 1.6, "#fff4c8"], [8.2, 2.0, 1.0, 1.6, "#fff4c8"],
 ]
 const CREAM := "#f3efe6"
-const ICON_BG := "#10292b"   # flat fill where an icon must be opaque (store, Android adaptive background)
+const ICON_BG := "#10292b"   # flat fill where an icon must be opaque (store icon)
+# Android adaptive icon (Guillaume, 2026-11-14: "the medal fills the icon"): the launcher shows the
+# middle 72 of 108 dp (radius 33.3 in this box), so the medal is scaled to just past that edge and
+# the background is the frame's cream: no dark ring round the medal on the home screen.
+const ADAPTIVE_SCALE := 0.86
+const ADAPTIVE_BG := "#e3dccb"
 const AMBER := "#f2b134"
 
 # The medal logo at `c`, `k` pixels per logo unit (frame radius R_FRAME), car at angle
@@ -102,8 +107,8 @@ static func _parts(a: float, mono := false) -> String:
 # The logo has no background (Guillaume, 2026-11-14). kind: "icon" (the medal alone on
 # transparent: icon.svg and the legacy launcher icon), "square" (store icon: Play wants it
 # opaque, so the medal on the flat ICON_BG), "background" (Android adaptive background: flat
-# ICON_BG, the launcher can't show transparency), "foreground" (medal only, inside Android's
-# safe zone), "monochrome" (white mask for themed icons)
+# ADAPTIVE_BG cream, the launcher can't show transparency), "foreground" (the medal at
+# ADAPTIVE_SCALE, filling the launcher's visible circle), "monochrome" (white mask, same size)
 static func icon_svg(kind: String, size: int) -> String:
 	var parts := _frame() + _parts(ANGLE)
 	match kind:
@@ -112,11 +117,11 @@ static func icon_svg(kind: String, size: int) -> String:
 		"square":
 			return _svg(size, "<rect x='-50' y='-50' width='100' height='100' fill='%s'/><g transform='translate(0 -1.5) scale(1.0)'>%s</g>" % [ICON_BG, parts])
 		"background":
-			return _svg(size, "<rect x='-50' y='-50' width='100' height='100' fill='%s'/>" % ICON_BG)
+			return _svg(size, "<rect x='-50' y='-50' width='100' height='100' fill='%s'/>" % ADAPTIVE_BG)
 		"foreground":
-			return _svg(size, "<g transform='scale(.72)'>%s</g>" % parts)
+			return _svg(size, "<g transform='scale(%s)'>%s</g>" % [ADAPTIVE_SCALE, parts])
 		"monochrome":
-			return _svg(size, "<g transform='scale(.72)'>%s%s</g>" % [_frame(true), _parts(ANGLE, true)])
+			return _svg(size, "<g transform='scale(%s)'>%s%s</g>" % [ADAPTIVE_SCALE, _frame(true), _parts(ANGLE, true)])
 	return ""
 
 static func _svg(size: int, body: String) -> String:
