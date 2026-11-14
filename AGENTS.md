@@ -22,7 +22,8 @@
   `update.json` beside its APK; an installed APK reads `update.json` from its own folder (main, or
   `pr/N/` for a PR's APK), downloads newer game data in the background and mounts it at the next
   launch (home page slip: "restart"). Data alone can't change the engine, `project.godot`, the export
-  presets or `self_update.gd` (the `SHELL` fingerprint CI writes into `scripts/build_info.gd`): a
+  presets, `self_update.gd` or the launcher icons `icons/icon-192.png` / `icons/adaptive-*.png`, which
+  live in the APK itself (the `SHELL` fingerprint CI writes into `scripts/build_info.gd`): a
   change to any of those makes installed apps offer the new APK instead (one tap to install, Android
   always asks). Only CI test APKs carry the `self_update` feature; a store build must never have it
   (Play forbids self-updating code). Keep `self_update.gd` to what must run before the game data

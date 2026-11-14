@@ -93,13 +93,14 @@ jobs:
 
       # Test builds update themselves (scripts/self_update.gd): stamp the build's number, the
       # Pages folder it checks for updates, and the fingerprint of what a game-data update can't
-      # change (engine, project.godot, export presets, the updater itself; taken before the
-      # Android step edits the presets). A newer build with another fingerprint needs its APK.
+      # change (engine, project.godot, export presets, the updater itself, the launcher icons
+      # baked into the APK; taken before the Android step edits the presets). A newer build with
+      # another fingerprint needs its APK.
       - name: Build info (self-update)
         env:
           PR: ${{ github.event.pull_request.number }}
         run: |
-          fp=$( { echo "$GODOT_VERSION"; cat project.godot export_presets.cfg scripts/self_update.gd; } | sha256sum | cut -c1-16)
+          fp=$( { echo "$GODOT_VERSION"; cat project.godot export_presets.cfg scripts/self_update.gd icons/icon-192.png icons/adaptive-*.png; } | sha256sum | cut -c1-16)
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           channel="https://$owner.github.io/${GITHUB_REPOSITORY#*/}/${PR:+pr/$PR/}"
           {
