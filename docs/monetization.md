@@ -6,7 +6,27 @@ Tether Rally goes free-to-play on Google Play: rewarded ads the player chooses t
 
 > **Reconfirm the app id first.** The current id `io.github.guillaumefont.tetherracing` is temporary and will change. Before any Play upload, any Play product, AdMob app or ad unit is created, ask Guillaume to reconfirm the final app id: it can never change after the first upload.
 
-All in-game text is English (the game has no translation system yet); the strings quoted below are the ones to show.
+All in-game text is English (the game has no translation system yet); the strings quoted below are the ones to show. The original French spec is kept in [monetization/spec-fr.md](monetization/spec-fr.md).
+
+## Status (Nov 15, 2026)
+
+Everything game-side is built and merged, running behind stubs (a test build grants purchases at once and plays a 1 s fake ad; a store build has neither stubs nor self-update):
+
+- PR #100: `Store`, `Ads` and `Monetization` services with stubs.
+- PR #101: "x2 coins" on the results, Gold ghost (51 traces at the Gold time, offered after a run without Gold), Daily Detour with 3 attempts (first lap free, practice, +1 attempt for an ad), full-screen ads, No ads / Restore / Privacy in Settings, the "Android Play" (AAB) export preset.
+- PR #102: starter pack and coin packs (shop under the Garage), Daily Detour streak with "Save my streak", ideal line.
+
+Before/after screenshots: [results](monetization/results_coins-before-after.jpg), [results phase 3](monetization/results_coins-phase3-before-after.jpg), [Daily Detour](monetization/menu_daily-before-after.jpg), [settings](monetization/settings-before-after.jpg), [home](monetization/menu_home-before-after.jpg), [Garage](monetization/menu_garage-phase3-before-after.jpg).
+
+**Waiting on Guillaume** (step 6 of phase 1 and the soft launch need his accounts):
+
+1. The final app id (reconfirm before anything below).
+2. An upload keystore, stored as a GitHub secret.
+3. Play Console account and products: `remove_ads`, `chrome_pack`, `neon_pack`, `starter_pack`, `coins_s`, `coins_m`.
+4. AdMob account, app and one ad unit per placement, plus the UMP consent message.
+5. A website for `app-ads.txt` and the privacy policy; Data safety and target audience forms.
+
+Then: real Billing, AdMob and UMP plugins with the Gradle template in CI, a test on a real phone, the closed test (12 testers, 14 days), and the Play Games daily leaderboard.
 
 ## Goal and principles
 
