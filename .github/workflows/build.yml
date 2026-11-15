@@ -100,9 +100,13 @@ jobs:
         env:
           PR: ${{ github.event.pull_request.number }}
         run: |
-          fp=$( { echo "$GODOT_VERSION"; cat project.godot export_presets.cfg scripts/self_update.gd icons/icon-192.png icons/adaptive-*.png; } | sha256sum | cut -c1-16)
+          fp=$( { echo "$GODOT_VERSION"; echo games-monorepo; cat project.godot export_presets.cfg scripts/self_update.gd icons/icon-192.png icons/adaptive-*.png; } | sha256sum | cut -c1-16)
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          channel="https://$owner.github.io/${GITHUB_REPOSITORY#*/}/${PR:+pr/$PR/}"
+          # This game moved to the guillaumefont/games monorepo. Main builds here point installed apps at
+          # its Pages folder (games/tether-rally/), and the shell id is salted the same way as there, so an
+          # installed app is offered this APK once, then updates from the monorepo's builds.
+          channel="https://$owner.github.io/games/tether-rally/"
+          if [ -n "$PR" ]; then channel="https://$owner.github.io/${GITHUB_REPOSITORY#*/}/pr/$PR/"; fi
           {
             echo "# Written by CI (.github/workflows/build.yml): see the committed file for what each value means."
             echo "extends RefCounted"
