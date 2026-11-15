@@ -1,3 +1,5 @@
+> **This game moved to [guillaumefont/games](https://github.com/guillaumefont/games/tree/main/tether-rally).** Builds are published at https://guillaumefont.github.io/games/tether-rally/ and installed test builds update from there.
+
 # Tether Rally
 
 **Play the latest `main` build:** [in your browser](https://guillaumefont.github.io/tether-rally/) · [Android APK](https://guillaumefont.github.io/tether-rally/tether-racing.apk)
